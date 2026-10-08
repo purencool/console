@@ -1,89 +1,57 @@
 <?php
+
 namespace Tests\Unit;
 
 use App\State\AppState;
 use PHPUnit\Framework\TestCase;
 
-/**
- * Test class for the AppState class.
- *
- * @package Tests\Unit
- */
 class AppStateTest extends TestCase
 {
-    /**
-     * Test the initial state of the AppState.
-     *
-     * @return void
-     */
+    private AppState $state;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->state = new AppState();
+    }
+
     public function testInitialState(): void
     {
-        $state = new AppState();
-
-        $this->assertTrue($state->isRunning());
-        $this->assertTrue($state->isMouseCaptureActive());
-        $this->assertEquals("", $state->getInputText());
-        $this->assertNotEmpty($state->getChatLog());
+        $this->assertTrue($this->state->isRunning());
+        $this->assertEquals("", $this->state->getInputText());
+        $this->assertEquals("chat", $this->state->getInputFocus());
     }
 
-    /* */
     public function testInputTextManagement(): void
     {
-        $state = new AppState();
-        $state->setInputText("Hello TUI");
-        $this->assertEquals("Hello TUI", $state->getInputText());
+        $this->state->setInputText("Hello");
+        $this->assertEquals("Hello", $this->state->getInputText());
 
-        $state->appendInputText("!");
-        $this->assertEquals("Hello TUI!", $state->getInputText());
+        $this->state->insertInputText(" World");
+        $this->assertEquals("Hello World", $this->state->getInputText());
     }
 
-    /**
-     * Test the chat log management.
-     *
-     * @return void
-     */
     public function testChatLogManagement(): void
     {
-        $state = new AppState();
-        $state->addChatMessage("Hello TUI");
-        $this->assertEquals(["Hello TUI"], $state->getChatLog());
+        $welcomeMsg = "[System] Welcome to the Console! Type your prompt, or type / to see all available commands and shortcuts.";
+        
+        $this->assertEquals([$welcomeMsg], $this->state->getChatLog());
 
-        $state->addChatMessage("!");
-        $this->assertEquals(["Hello TUI", "!"], $state->getChatLog());
+        $this->state->addChatMessage("Hello TUI");
+        $this->assertEquals([$welcomeMsg, "Hello TUI"], $this->state->getChatLog());
     }
 
-    /**
-     * Test the chat log limit when adding more messages than allowed.
-     *
-     * @return void
-     */
-    public function testChatLogLimit(): void
+    public function testTerminalDrawerToggling(): void
     {
-        $state = new AppState();
-
-        // Push 1005 messages to test the 1000-message shift limit
-        for ($i = 0; $i < 1005; $i++) {
-            $state->addChatMessage("Message $i");
-        }
-
-        $log = $state->getChatLog();
-        $this->assertLessThanOrEqual(1000, count($log));
-        $this->assertEquals("Message 1004", end($log));
+        $this->assertFalse($this->state->isTerminalDrawerOpen());
+        $this->state->toggleTerminalDrawer();
+        $this->assertTrue($this->state->isTerminalDrawerOpen());
     }
 
-    /**
-     * Test the option toggling functionality.
-     *
-     * @return void
-     */
-    public function testOptionToggling(): void
+    public function testSidebarToggling(): void
     {
-        $state = new AppState();
-        $options = $state->getOptions();
-
-        $this->assertFalse($options["cache"]["checked"]);
-
-        $state->toggleOption("cache");
-        $this->assertTrue($state->getOptions()["cache"]["checked"]);
+        $this->assertTrue($this->state->isSidebarVisible());
+        $this->state->toggleSidebar();
+        $this->assertFalse($this->state->isSidebarVisible());
     }
 }

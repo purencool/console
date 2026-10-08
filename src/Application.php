@@ -51,6 +51,7 @@ class Application
      */
     public function run(): void
     {
+        echo "\x1b[?25l"; // Hide native hardware cursor
         $this->terminal = TerminalSetup::initialize();
         $display = DisplayBuilder::default()->build();
 
@@ -109,6 +110,7 @@ class Application
                     $maxScroll,
                     fn($msg) => $this->log($msg),
                     fn() => $this->executeArtisan(),
+                    $display,
                 );
 
                 if ($skipCycle) {
@@ -118,6 +120,7 @@ class Application
             usleep(10000);
         }
         $display->clear();
+        echo "\x1b[?25h"; // Restore native hardware cursor
     }
 
     /**

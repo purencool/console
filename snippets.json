@@ -1,0 +1,23 @@
+[
+  {
+    "name": "correction",
+    "aliases": ["c"],
+    "text": "The following text needs to be corrected only: "
+  },
+  {
+    "name": "professional",
+    "aliases": ["p"],
+    "text": "The following text needs to be corrected only and use professional language: "
+  },
+  {
+    "name": "technical",
+    "aliases": ["t"],
+    "text": "The following text needs to be corrected only and use technical support language when changing the correction. Don't add extra detail!!!: "
+  },
+ {
+   "name": "kindness",
+   "aliases": ["k"],
+   "text": "The following text needs to be corrected only with kindness: "
+
+  }
+]
