@@ -27,7 +27,7 @@ class LlmService
     }
 
     /**
-     * ResolveCommand completes the following actions:
+     * Query completes the following actions:
      *  1. If the command starts with a `/`, it executes the
      *  corresponding command.
      *  2. Otherwise, it sends the prompt to the LLM and returns
@@ -39,7 +39,7 @@ class LlmService
      *
      * @return array{string, string}
      */
-    public function resolveCommand(string $promptText): array
+    public function query(string $promptText): array
     {
         if (str_starts_with($promptText, "/")) {
             $cmd =

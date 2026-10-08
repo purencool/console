@@ -3,6 +3,7 @@ namespace App;
 
 use App\State\AppState;
 use App\Services\LlmService;
+use App\Services\LogService;
 use App\Support\TerminalSetup;
 use App\UI\Renderer;
 use App\UI\EventHandler;
@@ -23,27 +24,17 @@ class Application
     /** @var LlmService */
     private LlmService $llmService;
 
-    /**
-     *
-     */
-    public function __construct(LlmService $llmService)
-    {
-        $this->state = new AppState();
-        $this->llmService = $llmService;
-    }
+    /** @var LogService */
+    private LogService $logService;
 
     /**
      *
      */
-    private function log(string $message): void
+    public function __construct(LlmService $llmService, LogService $logService)
     {
-        $logFile = __DIR__ . "/../error.log";
-        $timestamp = date("Y-m-d H:i:s");
-        file_put_contents(
-            $logFile,
-            "[$timestamp] DEBUG: $message\n",
-            FILE_APPEND,
-        );
+        $this->state = new AppState();
+        $this->llmService = $llmService;
+        $this->logService = $logService;
     }
 
     /**
@@ -56,50 +47,16 @@ class Application
         $display = DisplayBuilder::default()->build();
 
         while ($this->state->isRunning()) {
-            $termWidth = $display->viewportArea()->width;
-            $leftPaneWidth = (int) ($termWidth * 0.7);
-            $innerWidth = max(1, $leftPaneWidth - 2);
-
-            $wrappedInputLines = \App\Support\ReflectionHelper::wrapText(
-                $this->state->getInputText() . "",
-                $innerWidth,
+            // Let the specialized renderers manage inner bounds and
+            // set maximum scroll limits directly in the AppState object.
+            Renderer::render(
+                $display,
+                $this->state,
+                $this->state->getMaxScroll(),
             );
-            $wrappedChatLog = [];
-            foreach ($this->state->getChatLog() as $logLine) {
-                foreach (
-                    \App\Support\ReflectionHelper::wrapText(
-                        $logLine,
-                        $innerWidth,
-                    )
-                    as $wl
-                ) {
-                    $wrappedChatLog[] = $wl;
-                }
-            }
 
-            $inputBoxHeight = min(15, max(3, count($wrappedInputLines) + 2));
-            $terminalDrawerHeight = $this->state->isTerminalDrawerOpen()
-                ? (int) ($display->viewportArea()->height * 0.35)
-                : 0;
-            $visibleChatHeight = max(
-                5,
-                $display->viewportArea()->height -
-                    $inputBoxHeight -
-                    $terminalDrawerHeight -
-                    2,
-            );
-            $totalLines = count($wrappedChatLog);
-            $maxScroll = max(0, $totalLines - $visibleChatHeight);
-
-            if ($this->state->isAutoScroll()) {
-                $this->state->setScrollOffset($maxScroll);
-            } else {
-                $this->state->setScrollOffset(
-                    min(max(0, $this->state->getScrollOffset()), $maxScroll),
-                );
-            }
-
-            Renderer::render($display, $this->state, $maxScroll);
+            // Pull the cleanly computed boundaries back from your state machine
+            $maxScroll = $this->state->getMaxScroll();
 
             while (null !== ($event = $this->terminal->events()->next())) {
                 $skipCycle = EventHandler::handle(
@@ -107,8 +64,8 @@ class Application
                     $this->terminal,
                     $this->state,
                     $this->llmService,
-                    $maxScroll,
-                    fn($msg) => $this->log($msg),
+                    $maxScroll, // Safely forwards the synchronized bounds to mouse listeners
+                    fn($msg) => $this->logService->log($msg),
                     fn() => $this->executeArtisan(),
                     $display,
                 );
@@ -120,7 +77,8 @@ class Application
             usleep(10000);
         }
         $display->clear();
-        echo "\x1b[?25h"; // Restore native hardware cursor
+        // Restore native hardware cursor
+        echo "\x1b[?25h";
     }
 
     /**
@@ -139,7 +97,7 @@ class Application
                 : env_require("CMD_MIGRATE");
         }
 
-        $this->log("Executing: $command");
+        $this->logService->log("Executing: $command");
         $this->state->addChatMessage("[System] Executing: $command");
 
         $output = shell_exec($command . " 2>&1");

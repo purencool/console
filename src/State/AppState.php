@@ -1,597 +1,271 @@
 <?php
 namespace App\State;
 
-use ValueError;
-
 class AppState
 {
-    private bool $running = true;
-    private string $inputText = "";
-    private int $inputCursor = 0;
+    private ChatState $chat;
+    private TerminalState $terminal;
+    private EditorState $editor;
+    private SystemState $system;
 
-    private array $chatLog = [
-        "[System] Welcome to the Console! Type your prompt, or type / to see all available commands and shortcuts.",
-    ];
-    private int $scrollOffset = 0;
-    private bool $autoScroll = true;
-    private bool $terminalActive = false;
-    private string $terminalPrompt = ">";
-    private int $terminalWidth = 80;
-    private int $terminalHeight = 30;
-    private bool $sidebarDrawerOpen = false;
-    private bool $mouseCaptureActive = true;
-    private bool $terminalDrawerOpen = false;
-    private string $inputFocus = "chat";
+    public function __construct()
+    {
+        $this->chat = new ChatState();
+        $this->terminal = new TerminalState();
+        $this->editor = new EditorState();
+        $this->system = new SystemState();
+    }
 
-    private string $activeTerminalInput = "";
-    private int $terminalCursor = 0;
+    // Direct Accessors for clean decoupled development
+    public function chat(): ChatState
+    {
+        return $this->chat;
+    }
+    public function terminal(): TerminalState
+    {
+        return $this->terminal;
+    }
+    public function editor(): EditorState
+    {
+        return $this->editor;
+    }
+    public function system(): SystemState
+    {
+        return $this->system;
+    }
 
-    private string $activeTerminalOutput = "";
-    private array $terminalBuffer = [];
-    private int $terminalScrollOffset = 0;
-    private bool $sidebarVisible = true;
-    private ?string $scannedPath = null;
-    private string $scannedContext = "";
-
-    private bool $isProcessing = false;
-    private float $processingStartTime = 0.0;
-
-    private array $inputHistory = [];
-    private int $historyIndex = -1;
-    private string $tempInput = "";
-
-    private array $loadedSystemSkills = [];
-    private string $systemSkillContext = "";
-    private array $loadedUserSkills = [];
-    private string $userSkillContext = "";
-
-    // --- FULL SCREEN EDITOR STATE ---
-    private bool $editorOpen = false;
-    private string $editorFilePath = "";
-    private array $editorLines = [""];
-    private int $editorRow = 0;
-    private int $editorCol = 0;
-    private string $editorStatus = "";
-    private int $editorScrollY = 0;
-
-    // --- EDITOR SELECTION & CLIPBOARD ---
-    private bool $editorSelecting = false;
-    private int $editorSelStartRow = 0;
-    private int $editorSelStartCol = 0;
-    private string $editorClipboard = "";
-
-    private array $options = [
-        "cache" => ["label" => "Clear Cache", "checked" => false],
-        "migrate" => ["label" => "Run Migrations", "checked" => true],
-        "dryrun" => ["label" => "Dry Run Mode", "checked" => false],
-    ];
-
+    // --- SYSTEM CONTEXT PASS-THROUGHS ---
     public function isRunning(): bool
     {
-        return $this->running;
+        return $this->system->isRunning();
     }
     public function stop(): void
     {
-        $this->running = false;
-    }
-
-    public function getInputCursor(): int
-    {
-        return $this->inputCursor;
-    }
-    public function setInputCursor(int $pos): void
-    {
-        $this->inputCursor = max(0, min(mb_strlen($this->inputText), $pos));
-    }
-    public function getInputText(): string
-    {
-        return $this->inputText;
-    }
-    public function setInputText(string $text): void
-    {
-        $this->inputText = $text;
-        $this->inputCursor = mb_strlen($text);
-    }
-    public function insertInputText(string $char): void
-    {
-        $left = mb_substr($this->inputText, 0, $this->inputCursor);
-        $right = mb_substr($this->inputText, $this->inputCursor);
-        $this->inputText = $left . $char . $right;
-        $this->inputCursor += mb_strlen($char);
-    }
-    public function backspaceInputText(): void
-    {
-        if ($this->inputCursor > 0) {
-            $left = mb_substr($this->inputText, 0, $this->inputCursor - 1);
-            $right = mb_substr($this->inputText, $this->inputCursor);
-            $this->inputText = $left . $right;
-            $this->inputCursor--;
-        }
-    }
-
-    public function getChatLog(): array
-    {
-        return $this->chatLog;
-    }
-    public function addChatMessage(string $msg): void
-    {
-        $this->chatLog[] = $msg;
-        if (count($this->chatLog) > 1000) {
-            $this->chatLog = array_slice($this->chatLog, -1000);
-        }
-    }
-
-    public function getScrollOffset(): int
-    {
-        return $this->scrollOffset;
-    }
-    public function setScrollOffset(int $offset): void
-    {
-        $this->scrollOffset = max(0, $offset);
-    }
-    public function isAutoScroll(): bool
-    {
-        return $this->autoScroll;
-    }
-    public function setAutoScroll(bool $auto): void
-    {
-        $this->autoScroll = $auto;
-    }
-    public function isMouseCaptureActive(): bool
-    {
-        return $this->mouseCaptureActive;
-    }
-    public function toggleMouseCapture(): void
-    {
-        $this->mouseCaptureActive = !$this->mouseCaptureActive;
-    }
-    public function isTerminalDrawerOpen(): bool
-    {
-        return $this->terminalDrawerOpen;
-    }
-    public function toggleTerminalDrawer(): void
-    {
-        $this->terminalDrawerOpen = !$this->terminalDrawerOpen;
+        $this->system->stop();
     }
     public function getInputFocus(): string
     {
-        return $this->inputFocus;
+        return $this->system->getInputFocus();
     }
+
     public function setInputFocus(string $focus): void
     {
-        $this->inputFocus = $focus;
+        $this->system->setInputFocus($focus);
     }
     public function toggleInputFocus(): void
     {
-        $this->inputFocus = $this->inputFocus === "chat" ? "terminal" : "chat";
-    }
-
-    public function getTerminalCursor(): int
-    {
-        return $this->terminalCursor;
-    }
-    public function setTerminalCursor(int $pos): void
-    {
-        $this->terminalCursor = max(
-            0,
-            min(mb_strlen($this->activeTerminalInput), $pos),
+        $this->system->setInputFocus(
+            $this->getInputFocus() === "chat" ? "terminal" : "chat",
         );
-    }
-    public function getActiveTerminalInput(): string
-    {
-        return $this->activeTerminalInput;
-    }
-    public function setActiveTerminalInput(string $input): void
-    {
-        $this->activeTerminalInput = $input;
-        $this->terminalCursor = mb_strlen($input);
-    }
-    public function insertActiveTerminalInput(string $char): void
-    {
-        $left = mb_substr($this->activeTerminalInput, 0, $this->terminalCursor);
-        $right = mb_substr($this->activeTerminalInput, $this->terminalCursor);
-        $this->activeTerminalInput = $left . $char . $right;
-        $this->terminalCursor += mb_strlen($char);
-    }
-    public function backspaceActiveTerminalInput(): void
-    {
-        if ($this->terminalCursor > 0) {
-            $left = mb_substr(
-                $this->activeTerminalInput,
-                0,
-                $this->terminalCursor - 1,
-            );
-            $right = mb_substr(
-                $this->activeTerminalInput,
-                $this->terminalCursor,
-            );
-            $this->activeTerminalInput = $left . $right;
-            $this->terminalCursor--;
-        }
-    }
-
-    public function getTerminalBuffer(): array
-    {
-        return $this->terminalBuffer;
-    }
-    public function addTerminalOutput(string $line): void
-    {
-        $this->terminalBuffer[] = $line;
-    }
-    public function getTerminalScrollOffset(): int
-    {
-        return $this->terminalScrollOffset;
-    }
-    public function setTerminalScrollOffset(int $offset): void
-    {
-        $this->terminalScrollOffset = max(0, $offset);
     }
     public function isSidebarVisible(): bool
     {
-        return $this->sidebarVisible;
+        return $this->system->isSidebarVisible();
     }
     public function toggleSidebar(): void
     {
-        $this->sidebarVisible = !$this->sidebarVisible;
+        $this->system->toggleSidebar();
     }
     public function getScannedPath(): ?string
     {
-        return $this->scannedPath;
+        return $this->system->getScannedPath();
     }
     public function setScannedPath(?string $path): void
     {
-        $this->scannedPath = $path;
+        $this->system->setScannedPath($path);
     }
-    public function getScannedContext(): string
-    {
-        return $this->scannedContext;
-    }
-    public function setScannedContext(string $context): void
-    {
-        $this->scannedContext = $context;
-    }
-    public function getOptions(): array
-    {
-        return $this->options;
-    }
-    public function toggleOption(string $key): void
-    {
-        if (isset($this->options[$key])) {
-            $this->options[$key]["checked"] = !$this->options[$key]["checked"];
-        }
-    }
-
     public function isProcessing(): bool
     {
-        return $this->isProcessing;
+        return $this->system->isProcessing();
     }
     public function setProcessing(bool $processing): void
     {
-        $this->isProcessing = $processing;
-        if ($processing) {
-            $this->processingStartTime = microtime(true);
-        }
+        $this->system->setProcessing($processing);
     }
     public function getProcessingDuration(): float
     {
-        return round(microtime(true) - $this->processingStartTime, 2);
+        return $this->system->getProcessingDuration();
     }
-
+    public function getOptions(): array
+    {
+        return $this->system->getOptions();
+    }
+    public function toggleOption(string $key): void
+    {
+        $this->system->toggleOption($key);
+    }
     public function addHistory(string $input): void
     {
-        $input = trim($input);
-        if ($input !== "") {
-            $this->inputHistory[] = $input;
-        }
-        $this->historyIndex = -1;
-        $this->tempInput = "";
-    }
-    public function navigateHistory(string $direction): ?string
-    {
-        if (empty($this->inputHistory)) {
-            return null;
-        }
-        $count = count($this->inputHistory);
-        if ($direction === "up") {
-            if ($this->historyIndex === -1) {
-                $this->tempInput = $this->inputText;
-                $this->historyIndex = $count - 1;
-            } else {
-                $this->historyIndex = max(0, $this->historyIndex - 1);
-            }
-            return $this->inputHistory[$this->historyIndex];
-        }
-        if ($direction === "down") {
-            if ($this->historyIndex === -1) {
-                return null;
-            }
-            $this->historyIndex++;
-            if ($this->historyIndex >= $count) {
-                $this->historyIndex = -1;
-                return $this->tempInput;
-            }
-            return $this->inputHistory[$this->historyIndex];
-        }
-        return null;
+        $this->system->addHistory($input);
     }
 
-    public function getLoadedSystemSkills(): array
+    // --- CHAT CONTEXT PASS-THROUGHS ---
+    public function getInputText(): string
     {
-        return $this->loadedSystemSkills;
+        return $this->chat->getInputText();
     }
-    public function setLoadedSystemSkills(array $skills): void
+    public function setInputText(string $text): void
     {
-        $this->loadedSystemSkills = $skills;
+        $this->chat->setInputText($text);
     }
-    public function getSystemSkillContext(): string
+    public function getInputCursor(): int
     {
-        return $this->systemSkillContext;
+        return $this->chat->getInputCursor();
     }
-    public function setSystemSkillContext(string $context): void
+    public function setInputCursor(int $pos): void
     {
-        $this->systemSkillContext = $context;
+        $this->chat->setInputCursor($pos);
     }
-    public function getLoadedUserSkills(): array
+    public function insertInputText(string $char): void
     {
-        return $this->loadedUserSkills;
+        $this->chat->insertInputText($char);
     }
-    public function setLoadedUserSkills(array $skills): void
+    public function backspaceInputText(): void
     {
-        $this->loadedUserSkills = $skills;
+        $this->chat->backspaceInputText();
     }
-    public function getUserSkillContext(): string
+    public function getChatLog(): array
     {
-        return $this->userSkillContext;
+        return $this->chat->getChatLog();
     }
-    public function setUserSkillContext(string $context): void
+    public function addChatMessage(string $msg): void
     {
-        $this->userSkillContext = $context;
+        $this->chat->addChatMessage($msg);
+    }
+    public function getScrollOffset(): int
+    {
+        return $this->chat->getScrollOffset();
+    }
+    public function setScrollOffset(int $offset): void
+    {
+        $this->chat->setScrollOffset($offset);
+    }
+    public function getMaxScroll(): int
+    {
+        return $this->chat->getMaxScroll();
+    }
+    public function setMaxScroll(int $maxScroll): void
+    {
+        $this->chat->setMaxScroll($maxScroll);
+    }
+    public function isAutoScroll(): bool
+    {
+        return $this->chat->isAutoScroll();
+    }
+    public function setAutoScroll(bool $auto): void
+    {
+        $this->chat->setAutoScroll($auto);
     }
 
-    // --- EDITOR METHODS ---
+    // --- TERMINAL CONTEXT PASS-THROUGHS ---
+    public function getActiveTerminalInput(): string
+    {
+        return $this->terminal->getActiveTerminalInput();
+    }
+    public function setActiveTerminalInput(string $input): void
+    {
+        $this->terminal->setActiveTerminalInput($input);
+    }
+    public function getTerminalCursor(): int
+    {
+        return $this->terminal->getTerminalCursor();
+    }
+    public function setTerminalCursor(int $pos): void
+    {
+        $this->terminal->setTerminalCursor($pos);
+    }
+    public function insertActiveTerminalInput(string $char): void
+    {
+        $this->terminal->insertActiveTerminalInput($char);
+    }
+    public function backspaceActiveTerminalInput(): void
+    {
+        $this->terminal->backspaceActiveTerminalInput();
+    }
+    public function getTerminalBuffer(): array
+    {
+        return $this->terminal->getTerminalBuffer();
+    }
+    public function addTerminalOutput(string $line): void
+    {
+        $this->terminal->addTerminalOutput($line);
+    }
+    public function getTerminalScrollOffset(): int
+    {
+        return $this->terminal->getTerminalScrollOffset();
+    }
+    public function setTerminalScrollOffset(int $offset): void
+    {
+        $this->terminal->setTerminalScrollOffset($offset);
+    }
+    public function isTerminalDrawerOpen(): bool
+    {
+        return $this->terminal->isTerminalDrawerOpen();
+    }
+    public function toggleTerminalDrawer(): void
+    {
+        $this->terminal->toggleTerminalDrawer();
+    }
+
+    // --- EDITOR CONTEXT PASS-THROUGHS ---
     public function isEditorOpen(): bool
     {
-        return $this->editorOpen;
+        return $this->editor->isEditorOpen();
     }
     public function setEditorOpen(bool $open): void
     {
-        $this->editorOpen = $open;
+        $this->editor->setEditorOpen($open);
     }
     public function getEditorFilePath(): string
     {
-        return $this->editorFilePath;
+        return $this->editor->getEditorFilePath();
     }
     public function setEditorFilePath(string $path): void
     {
-        $this->editorFilePath = $path;
+        $this->editor->setEditorFilePath($path);
     }
     public function getEditorLines(): array
     {
-        return $this->editorLines;
+        return $this->editor->getEditorLines();
     }
     public function setEditorLines(array $lines): void
     {
-        $this->editorLines = empty($lines) ? [""] : $lines;
-        $this->editorRow = 0;
-        $this->editorCol = 0;
-        $this->editorStatus = "Ready";
-        $this->editorScrollY = 0;
+        $this->editor->setEditorLines($lines);
     }
     public function getEditorRow(): int
     {
-        return $this->editorRow;
+        return $this->editor->getEditorRow();
     }
     public function setEditorRow(int $row): void
     {
-        $this->editorRow = max(0, min(count($this->editorLines) - 1, $row));
+        $this->editor->setEditorRow($row);
     }
     public function getEditorCol(): int
     {
-        return $this->editorCol;
+        return $this->editor->getEditorCol();
     }
     public function setEditorCol(int $col): void
     {
-        $this->editorCol = max(
-            0,
-            min(mb_strlen($this->editorLines[$this->editorRow]), $col),
-        );
+        $this->editor->setEditorCol($col);
     }
     public function getEditorStatus(): string
     {
-        return $this->editorStatus;
+        return $this->editor->getEditorStatus();
     }
     public function setEditorStatus(string $status): void
     {
-        $this->editorStatus = $status;
+        $this->editor->setEditorStatus($status);
     }
-    public function getEditorScrollY(): int
-    {
-        return $this->editorScrollY;
-    }
-    public function setEditorScrollY(int $y): void
-    {
-        $this->editorScrollY = max(0, $y);
-    }
-
-    // --- SELECTION & CLIPBOARD METHODS ---
-    public function getEditorSelection(): ?array
-    {
-        if (!$this->editorSelecting) {
-            return null;
-        }
-        $startRow = $this->editorSelStartRow;
-        $startCol = $this->editorSelStartCol;
-        $endRow = $this->editorRow;
-        $endCol = $this->editorCol;
-
-        if (
-            $startRow > $endRow ||
-            ($startRow === $endRow && $startCol > $endCol)
-        ) {
-            return [
-                "start" => [$endRow, $endCol],
-                "end" => [$startRow, $startCol],
-            ];
-        }
-        return ["start" => [$startRow, $startCol], "end" => [$endRow, $endCol]];
-    }
-
-    public function copyEditorSelection(): void
-    {
-        $sel = $this->getEditorSelection();
-        if (!$sel) {
-            return;
-        }
-
-        $sr = $sel["start"][0];
-        $sc = $sel["start"][1];
-        $er = $sel["end"][0];
-        $ec = $sel["end"][1];
-
-        if ($sr === $er) {
-            $this->editorClipboard = mb_substr(
-                $this->editorLines[$sr],
-                $sc,
-                $ec - $sc,
-            );
-        } else {
-            $clip = [mb_substr($this->editorLines[$sr], $sc)];
-            for ($i = $sr + 1; $i < $er; $i++) {
-                $clip[] = $this->editorLines[$i];
-            }
-            $clip[] = mb_substr($this->editorLines[$er], 0, $ec);
-            $this->editorClipboard = implode(
-                "
-",
-                $clip,
-            );
-        }
-        $this->editorStatus = "Copied selection";
-        $this->clearEditorSelection();
-    }
-
-    public function deleteEditorSelection(): bool
-    {
-        $sel = $this->getEditorSelection();
-        if (!$sel) {
-            return false;
-        }
-
-        $sr = $sel["start"][0];
-        $sc = $sel["start"][1];
-        $er = $sel["end"][0];
-        $ec = $sel["end"][1];
-
-        $left = mb_substr($this->editorLines[$sr], 0, $sc);
-        $right = mb_substr($this->editorLines[$er], $ec);
-
-        array_splice($this->editorLines, $sr, $er - $sr + 1, [$left . $right]);
-
-        $this->editorRow = $sr;
-        $this->editorCol = $sc;
-        $this->clearEditorSelection();
-        $this->editorStatus = "Unsaved changes";
-        return true;
-    }
-
-    public function cutEditorSelection(): void
-    {
-        if ($this->editorSelecting) {
-            $this->copyEditorSelection();
-            $this->deleteEditorSelection();
-            $this->editorStatus = "Cut selection";
-        }
-    }
-
-    public function pasteEditorClipboard(): void
-    {
-        if ($this->editorClipboard === "") {
-            return;
-        }
-        if ($this->editorSelecting) {
-            $this->deleteEditorSelection();
-        }
-
-        $chars = mb_str_split($this->editorClipboard);
-        foreach ($chars as $char) {
-            if (
-                $char ===
-                "
-"
-            ) {
-                $this->enterEditorLine();
-            } else {
-                $this->insertEditorChar($char);
-            }
-        }
-        $this->editorStatus = "Pasted selection";
-    }
-
-    public function startOrUpdateEditorSelection(): void
-    {
-        if (!$this->editorSelecting) {
-            $this->editorSelecting = true;
-            $this->editorSelStartRow = $this->editorRow;
-            $this->editorSelStartCol = $this->editorCol;
-        }
-    }
-
-    public function clearEditorSelection(): void
-    {
-        $this->editorSelecting = false;
-    }
-
     public function insertEditorChar(string $char): void
     {
-        if ($this->editorSelecting) {
-            $this->deleteEditorSelection();
-        }
-        $line = $this->editorLines[$this->editorRow];
-        $left = mb_substr($line, 0, $this->editorCol);
-        $right = mb_substr($line, $this->editorCol);
-        $this->editorLines[$this->editorRow] = $left . $char . $right;
-        $this->editorCol += mb_strlen($char);
-        $this->editorStatus = "Unsaved changes";
-    }
-    public function enterEditorLine(): void
-    {
-        if ($this->editorSelecting) {
-            $this->deleteEditorSelection();
-        }
-        $line = $this->editorLines[$this->editorRow];
-        $left = mb_substr($line, 0, $this->editorCol);
-        $right = mb_substr($line, $this->editorCol);
-        $this->editorLines[$this->editorRow] = $left;
-        array_splice($this->editorLines, $this->editorRow + 1, 0, [$right]);
-        $this->editorRow++;
-        $this->editorCol = 0;
-        $this->editorStatus = "Unsaved changes";
+        $this->editor->insertEditorChar($char);
     }
     public function backspaceEditorChar(): void
     {
-        if ($this->editorSelecting) {
-            $this->deleteEditorSelection();
-            return;
-        }
-        if ($this->editorSelecting) {
-            $this->deleteEditorSelection();
-            return;
-        }
-        if ($this->editorCol > 0) {
-            $line = $this->editorLines[$this->editorRow];
-            $left = mb_substr($line, 0, $this->editorCol - 1);
-            $right = mb_substr($line, $this->editorCol);
-            $this->editorLines[$this->editorRow] = $left . $right;
-            $this->editorCol--;
-            $this->editorStatus = "Unsaved changes";
-        } elseif ($this->editorRow > 0) {
-            $prevLen = mb_strlen($this->editorLines[$this->editorRow - 1]);
-            $this->editorLines[$this->editorRow - 1] .=
-                $this->editorLines[$this->editorRow];
-            array_splice($this->editorLines, $this->editorRow, 1);
-            $this->editorRow--;
-            $this->editorCol = $prevLen;
-            $this->editorStatus = "Unsaved changes";
-        }
+        $this->editor->backspaceEditorChar();
+    }
+    public function enterEditorLine(): void
+    {
+        $this->editor->enterEditorLine();
     }
 }
