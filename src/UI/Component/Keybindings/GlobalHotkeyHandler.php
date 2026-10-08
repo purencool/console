@@ -10,35 +10,18 @@ class GlobalHotkeyHandler
 {
     public function handle(CodedKeyEvent $event, AppState $state): bool
     {
+        // Intercept Control modifier actions for function keys
         if (
             ($event->modifiers & KeyModifiers::CONTROL) ===
             KeyModifiers::CONTROL
         ) {
-            $codeName = "";
-            if (
-                is_object($event->code) &&
-                property_exists($event->code, "name")
-            ) {
-                $codeName = $event->code->name;
-            } elseif (is_scalar($event->code)) {
-                $codeName = (string) $event->code;
-            }
-
-            $target = strtolower($codeName);
-
-            if ($target === "t" || $event->code === KeyCode::Char) {
-                $state->toggleTerminalDrawer();
-                return true;
-            }
-            if ($target === "s") {
-                $state->toggleSidebar();
-                return true;
-            }
+            // Tab is a valid CodedKeyEvent code path
             if ($event->code === KeyCode::Tab) {
                 $state->toggleInputFocus();
                 return true;
             }
         }
+
         return false;
     }
 }

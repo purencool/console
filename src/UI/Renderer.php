@@ -117,7 +117,7 @@ class Renderer
             ),
         ];
 
-        // 3. Render Terminal Drawer if active
+        // Render Terminal Drawer if active
         if ($state->isTerminalDrawerOpen()) {
             $termLines = new TerminalRenderer()->render(
                 $state,
@@ -135,7 +135,7 @@ class Renderer
             );
         }
 
-        // 4. Delegate compilation
+        // Delegate compilation
         new LayoutRenderer()->render(
             $display,
             $state,

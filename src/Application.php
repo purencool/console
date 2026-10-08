@@ -70,9 +70,9 @@ class Application
                     $display,
                 );
 
-                if ($skipCycle) {
-                    continue 2;
-                }
+                // if ($skipCycle) {
+                //       continue 2;
+                //   }
             }
             usleep(10000);
         }

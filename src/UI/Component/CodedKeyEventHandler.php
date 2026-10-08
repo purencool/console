@@ -12,6 +12,9 @@ use PhpTui\Term\KeyCode;
 
 class CodedKeyEventHandler
 {
+    /**
+     * Delegates event executions down into single-responsibility sub-handlers.
+     */
     public function handle(
         CodedKeyEvent $event,
         AppState $state,
@@ -19,25 +22,24 @@ class CodedKeyEventHandler
         int $maxScroll,
         callable $logger,
     ): bool {
-        if (new GlobalHotkeyHandler()->handle($event, $state)) {
+        $globalHandler = new GlobalHotkeyHandler();
+        if ($globalHandler->handle($event, $state)) {
             return true;
         }
 
-        if (new NavigationHandler()->handle($event, $state, $maxScroll)) {
+        $navigationHandler = new NavigationHandler();
+        if ($navigationHandler->handle($event, $state, $maxScroll)) {
             return true;
         }
 
         if ($event->code === KeyCode::Enter) {
-            if (new TerminalSubmissionHandler()->handle($state)) {
+            $terminalHandler = new TerminalSubmissionHandler();
+            if ($terminalHandler->handle($state)) {
                 return true;
             }
-            if (
-                new ChatSubmissionHandler()->handle(
-                    $state,
-                    $llmService,
-                    $logger,
-                )
-            ) {
+
+            $chatHandler = new ChatSubmissionHandler();
+            if ($chatHandler->handle($state, $llmService, $logger)) {
                 return true;
             }
         }
