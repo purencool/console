@@ -27,20 +27,25 @@ $dotenv->load();
 /**
  * Config
  */
-$destination = __DIR__ . "/../.config/";
-// Check if the destination file does NOT exist
-if (!dir_exists($destination)) {
-    $source = __DIR__ . "/../config";
-    if (copy($source, $destination)) {
-        echo "File copied successfully.";
+$sourceDir = __DIR__ . "/../config";
+$destinationDir = __DIR__ . "/../.config";
+if (!is_dir($destinationDir)) {
+    if (is_dir($sourceDir)) {
+        mkdir($destinationDir, 0755, true);
+        $files = glob($sourceDir . "/*");
+        foreach ($files as $file) {
+            if (is_file($file)) {
+                $targetFile = $destinationDir . "/" . basename($file);
+                copy($file, $targetFile);
+            }
+        }
+        echo "All files installed successfully.";
     } else {
-        echo "Failed to copy the file.";
+        echo "Source directory does not exist.";
     }
-} else {
-    echo "Destination dir already exists. Copy skipped.";
 }
 
-/**
+/*
  * The absolute foolproof crash renderer
  */
 $logFile = dirname(__DIR__) . "./.config/error.log";
