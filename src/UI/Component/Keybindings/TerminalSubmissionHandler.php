@@ -13,6 +13,8 @@ class TerminalSubmissionHandler
         ) {
             $cmd = trim($state->getActiveTerminalInput());
             if ($cmd !== "") {
+                $state->recordTermSubmission($state->getActiveTerminalInput());
+
                 $state->addTerminalOutput("$ " . $cmd);
                 $output = shell_exec($cmd . " 2>&1");
                 if ($output !== null && trim($output) !== "") {

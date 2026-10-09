@@ -1,5 +1,7 @@
 <?php
 error_reporting(E_ALL & ~E_DEPRECATED);
+ini_set("display_errors", "1");
+
 require __DIR__ . "/../vendor/autoload.php";
 
 use Dotenv\Dotenv;
@@ -25,47 +27,77 @@ $dotenv->load();
 $llmChatCmd = env_require("LLM_CHAT_CMD");
 $skillsCmd = env_require("SKILLS_CMD");
 
-$logFile = __DIR__ . "/../tui_error.log";
+// 💡 Using realpath to guarantee the path resolving works from any working directory
+$logFile = dirname(__DIR__) . "/error.log";
 
-register_shutdown_function(function () {
-    fwrite(STDOUT, "\x1b[?1049l");
-    shell_exec("stty sane");
-});
+/**
+ * 💡 The absolute foolproof crash renderer
+ */
+$terminalCrashHandler = function (\Throwable $e) use ($logFile) {
+    // 1. Force the terminal out of the alternate screen buffer and reset attributes
+    echo "\x1b[?1049l"; // Exit alternate screen
+    echo "\x1b[?25h"; // Show cursor
+    echo "\x1b[0m"; // Reset text formatting styles
 
-set_exception_handler(function (\Throwable $e) use ($logFile) {
+    if (function_exists("shell_exec")) {
+        shell_exec("stty sane");
+        shell_exec("clear"); // Clean up terminal rendering artifacts
+    }
+
+    echo "\n\x1b[1;31m=== APPLICATION CRASH DETECTED ===\x1b[0m\n";
+
     $timestamp = date("Y-m-d H:i:s");
-    $msg =
-        "[$timestamp] EXCEPTION: " .
-        $e->getMessage() .
-        " in " .
-        $e->getFile() .
-        " on line " .
-        $e->getLine() .
-        "\n";
-    $msg .= $e->getTraceAsString() . "\n\n";
-    file_put_contents($logFile, $msg, FILE_APPEND);
-    exit(1);
-});
+    $errorMessage = sprintf(
+        "[%s] %s: %s\nFile: %s\nLine: %d\n",
+        $timestamp,
+        get_class($e),
+        $e->getMessage(),
+        $e->getFile(),
+        $e->getLine(),
+    );
+    $trace = $e->getTraceAsString();
 
+    // 2. Visible standard output directly to your prompt screen
+    echo $errorMessage . "\n" . $trace . "\n\n";
+
+    // 3. Robust atomic log file writing
+    @file_put_contents(
+        $logFile,
+        $errorMessage . "\n" . $trace . "\n\n",
+        FILE_APPEND,
+    );
+
+    exit(1);
+};
+
+// Intercept low-level standard PHP errors/warnings and convert to exceptions
 set_error_handler(function ($errno, $errstr, $errfile, $errline) use (
-    $logFile,
+    $terminalCrashHandler,
 ) {
-    if ($errno === E_DEPRECATED || $errno === E_USER_DEPRECATED) {
+    if (
+        !(error_reporting() & $errno) ||
+        $errno === E_DEPRECATED ||
+        $errno === E_USER_DEPRECATED
+    ) {
         return false;
     }
-    $timestamp = date("Y-m-d H:i:s");
-    $msg = "[$timestamp] ERROR [$errno]: $errstr in $errfile on line $errline\n";
-    file_put_contents($logFile, $msg, FILE_APPEND);
-    return false;
+    $terminalCrashHandler(
+        new \ErrorException($errstr, 0, $errno, $errfile, $errline),
+    );
+    return true;
 });
 
-if (function_exists("pcntl_async_signals")) {
-    pcntl_async_signals(true);
-    pcntl_signal(SIGINT, function () {
-        exit(1);
-    });
-}
+// 🔥 CRITICAL: Capture standard uncaught exceptions globally
+set_exception_handler($terminalCrashHandler);
 
-$logService = new LogService();
-$llmService = new LlmService($llmChatCmd, $skillsCmd);
-new Application($llmService, $logService)->run();
+// 🔥 THE BULLETPROOF JACKET: Ensure runtime setup can't exit raw mode silently
+try {
+    $logService = new LogService();
+    $llmService = new LlmService($llmChatCmd, $skillsCmd);
+
+    $app = new Application($llmService, $logService);
+    $app->run();
+} catch (\Throwable $fatalRuntimeError) {
+    // If anything breaks inside the application run loop, intercept it here manually
+    $terminalCrashHandler($fatalRuntimeError);
+}

@@ -47,7 +47,6 @@ class AppState
     {
         return $this->system->getInputFocus();
     }
-
     public function setInputFocus(string $focus): void
     {
         $this->system->setInputFocus($focus);
@@ -97,6 +96,19 @@ class AppState
     public function addHistory(string $input): void
     {
         $this->system->addHistory($input);
+    }
+
+    public function historyUp(): void
+    {
+        $this->system->historyUp(
+            fn($text) => $this->setInputText($text),
+            fn() => $this->getInputText(),
+        );
+    }
+
+    public function historyDown(): void
+    {
+        $this->system->historyDown(fn($text) => $this->setInputText($text));
     }
 
     // --- CHAT CONTEXT PASS-THROUGHS ---
@@ -157,6 +169,16 @@ class AppState
         $this->chat->setAutoScroll($auto);
     }
 
+    public function recordChatSubmission(string $input): void
+    {
+        $this->chat->recordSubmission($input);
+    }
+
+    public function cycleChatHistory(bool $up): void
+    {
+        $this->chat->cycleHistory($up);
+    }
+
     // --- TERMINAL CONTEXT PASS-THROUGHS ---
     public function getActiveTerminalInput(): string
     {
@@ -205,6 +227,14 @@ class AppState
     public function toggleTerminalDrawer(): void
     {
         $this->terminal->toggleTerminalDrawer();
+    }
+    public function recordTermSubmission(string $input): void
+    {
+        $this->terminal->recordSubmission($input);
+    }
+    public function cycleTermHistory(bool $up): void
+    {
+        $this->terminal->cycleHistory($up);
     }
 
     // --- EDITOR CONTEXT PASS-THROUGHS ---
@@ -267,5 +297,23 @@ class AppState
     public function enterEditorLine(): void
     {
         $this->editor->enterEditorLine();
+    }
+
+    // --- EDITOR VIEWPORT SCROLL LAYER PIPELINE ---
+    public function getEditorScrollY(): int
+    {
+        return $this->editor->getScrollY();
+    }
+    public function getEditorScrollX(): int
+    {
+        return $this->editor->getScrollX();
+    }
+    public function setEditorScrollY(int $y): void
+    {
+        $this->editor->setScrollY($y);
+    }
+    public function setEditorScrollX(int $x): void
+    {
+        $this->editor->setScrollX($x);
     }
 }

@@ -9,49 +9,63 @@ use PhpTui\Term\KeyCode;
 
 class KeyBindingService
 {
+    // Global Actions
     public const ACTION_EXIT = 'exit';
     public const ACTION_FORCE_EXIT = 'force_exit';
     public const ACTION_TOGGLE_TERMINAL = 'toggle_terminal';
     public const ACTION_TOGGLE_SIDEBAR = 'toggle_sidebar';
     public const ACTION_TOGGLE_FOCUS = 'toggle_focus';
     public const ACTION_PASTE = 'paste';
+    public const ACTION_HISTORY_UP = 'history_up';
+    public const ACTION_HISTORY_DOWN = 'history_down';
 
+    // Slash Commands
     public const CMD_NEW = '/n';
     public const CMD_HELP = '/';
     public const CMD_PATH = '/path';
     public const CMD_PASTE = '/paste';
     public const CMD_SAVE = '/save';
-    
     public const CMD_SKILLS_LOAD = '/skills load';
     public const CMD_SKILLS_SEE = '/skills see';
     public const CMD_SNIPPET = '/snippet';
     public const CMD_EDIT = '/edit';
 
+    /**
+     * Matches raw terminal events into explicit action keywords.
+     */
     public function matchEvent(Event $event): ?string
     {
+        // 1. Handle explicit Coded keys (Esc, Tab, Arrows)
         if ($event instanceof CodedKeyEvent) {
-            if ($event->code === KeyCode::Esc) {
+            if ($event->code === KeyCode::Esc || (method_exists($event->code, 'name') && $event->code->name === 'Esc')) {
                 return self::ACTION_EXIT;
             }
-            if ($event->code === KeyCode::Tab) {
+            if ($event->code === KeyCode::Tab || (method_exists($event->code, 'name') && $event->code->name === 'Tab')) {
                 return self::ACTION_TOGGLE_FOCUS;
+            }
+            if ($event->code === KeyCode::Up || (method_exists($event->code, 'name') && $event->code->name === 'Up')) {
+                return self::ACTION_HISTORY_UP;
+            }
+            if ($event->code === KeyCode::Down || (method_exists($event->code, 'name') && $event->code->name === 'Down')) {
+                return self::ACTION_HISTORY_DOWN;
             }
         }
 
+        // 2. Handle text-level stream mutations (Ctrl Combos)
         if ($event instanceof CharKeyEvent) {
             $isCtrl = ($event->modifiers & KeyModifiers::CONTROL) === KeyModifiers::CONTROL;
             $char = strtolower($event->char);
 
-            if ($event->char === "\x11" || ($isCtrl && $char === 'q')) {
+            if (($char === 'q' && $isCtrl) || $event->char === "\x11") {
                 return self::ACTION_FORCE_EXIT;
             }
-            if ($event->char === "\x14" || ($isCtrl && $char === 't')) {
+            if (($char === 't' && $isCtrl) || $event->char === "\x14") {
                 return self::ACTION_TOGGLE_TERMINAL;
             }
-            if ($event->char === "\x13" || ($isCtrl && $char === 's')) {
+            if (($char === 's' && $isCtrl) || $event->char === "\x13") {
                 return self::ACTION_TOGGLE_SIDEBAR;
             }
-            if ($event->char === "\x16" || ($isCtrl && $char === 'v')) {
+            if (($char === 'v' && $isCtrl) || $event->char === "\x16") {
                 return self::ACTION_PASTE;
             }
         }
@@ -75,8 +89,17 @@ class KeyBindingService
     public function isSkillsLoadCommand(string $input): bool { return str_starts_with(trim($input), self::CMD_SKILLS_LOAD); }
     public function isSkillsSeeCommand(string $input): bool { return trim($input) === self::CMD_SKILLS_SEE; }
 
-    public function isEditCommand(string $input): bool { return str_starts_with(trim($input), self::CMD_EDIT . ' '); }
-    public function extractEditPath(string $input): string { return trim(substr(trim($input), strlen(self::CMD_EDIT))); }
+    public function isEditCommand(string $input): bool { 
+        $trim = trim($input);
+        return $trim === self::CMD_EDIT || str_starts_with($trim, self::CMD_EDIT . ' '); 
+    }
+    public function extractEditPath(string $input): string { 
+        $trim = trim($input);
+        if ($trim === self::CMD_EDIT) {
+            return '';
+        }
+        return trim(substr($trim, strlen(self::CMD_EDIT))); 
+    }
 
     public function isSnippetCommand(string $input): bool { 
         $trim = trim($input);

@@ -9,6 +9,10 @@ class TerminalState
     private int $terminalScrollOffset = 0;
     private bool $terminalDrawerOpen = false;
 
+    // 💡 Declared encapsulated local command history stack properties
+    private array $termHistoryStack = [];
+    private int $termHistoryIdx = -1;
+
     public function getActiveTerminalInput(): string
     {
         return $this->activeTerminalInput;
@@ -81,5 +85,43 @@ class TerminalState
     public function toggleTerminalDrawer(): void
     {
         $this->terminalDrawerOpen = !$this->terminalDrawerOpen;
+    }
+
+    /**
+     * 💡 Records submitted terminal command text to the internal historical stack memory buffer.
+     */
+    public function recordSubmission(string $input): void
+    {
+        if (trim($input) !== "") {
+            array_unshift($this->termHistoryStack, $input);
+            $this->termHistoryIdx = -1; // Reset indices configuration tracking offset pointer marker
+        }
+    }
+
+    /**
+     * 💡 Cycles active terminal input command display values backward/forward inside text fields.
+     */
+    public function cycleHistory(bool $up): void
+    {
+        if (empty($this->termHistoryStack)) {
+            return;
+        }
+
+        if ($up) {
+            if ($this->termHistoryIdx < count($this->termHistoryStack) - 1) {
+                $this->termHistoryIdx++;
+                $this->setActiveTerminalInput($this->termHistoryStack[$this->termHistoryIdx]);
+                $this->setTerminalCursor(mb_strlen($this->getActiveTerminalInput()));
+            }
+        } else {
+            if ($this->termHistoryIdx > 0) {
+                $this->termHistoryIdx--;
+                $this->setActiveTerminalInput($this->termHistoryStack[$this->termHistoryIdx]);
+            } else {
+                $this->termHistoryIdx = -1;
+                $this->setActiveTerminalInput("");
+            }
+            $this->setTerminalCursor(mb_strlen($this->getActiveTerminalInput()));
+        }
     }
 }

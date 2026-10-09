@@ -25,14 +25,18 @@ class EditorEventHandler
                 $state->setEditorOpen(false);
                 return true;
             }
-            if ($event->code === KeyCode::Up) {
-                $state->setEditorRow($state->getEditorRow() - 1);
-                return true;
-            }
-            if ($event->code === KeyCode::Down) {
-                $state->setEditorRow($state->getEditorRow() + 1);
-                return true;
-            }
+if ($event->code === KeyCode::Up) {
+    if ($state->getEditorRow() > 0) {
+        $state->setEditorRow($state->getEditorRow() - 1);
+    }
+    return true;
+}
+if ($event->code === KeyCode::Down) {
+    if ($state->getEditorRow() < count($state->getEditorLines()) - 1) {
+        $state->setEditorRow($state->getEditorRow() + 1);
+    }
+    return true;
+}
             if ($event->code === KeyCode::Left) {
                 if ($state->getEditorCol() > 0) {
                     $state->setEditorCol($state->getEditorCol() - 1);

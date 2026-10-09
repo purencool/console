@@ -12,6 +12,10 @@ class ChatState
     private int $maxScroll = 0;
     private bool $autoScroll = true;
 
+    // 💡 Declared encapsulated local command history stack properties
+    private array $chatHistoryStack = [];
+    private int $chatHistoryIdx = -1;
+
     public function getInputText(): string
     {
         return $this->inputText;
@@ -86,5 +90,43 @@ class ChatState
     public function setAutoScroll(bool $auto): void
     {
         $this->autoScroll = $auto;
+    }
+
+    /**
+     * 💡 Records submitted prompt text to the internal historical stack memory buffer.
+     */
+    public function recordSubmission(string $input): void
+    {
+        if (trim($input) !== "") {
+            array_unshift($this->chatHistoryStack, $input);
+            $this->chatHistoryIdx = -1; // Reset indices configuration tracking offset pointer marker
+        }
+    }
+
+    /**
+     * 💡 Cycles active terminal input prompt display values backward/forward inside text fields.
+     */
+    public function cycleHistory(bool $up): void
+    {
+        if (empty($this->chatHistoryStack)) {
+            return;
+        }
+
+        if ($up) {
+            if ($this->chatHistoryIdx < count($this->chatHistoryStack) - 1) {
+                $this->chatHistoryIdx++;
+                $this->setInputText($this->chatHistoryStack[$this->chatHistoryIdx]);
+                $this->setInputCursor(mb_strlen($this->getInputText()));
+            }
+        } else {
+            if ($this->chatHistoryIdx > 0) {
+                $this->chatHistoryIdx--;
+                $this->setInputText($this->chatHistoryStack[$this->chatHistoryIdx]);
+            } else {
+                $this->chatHistoryIdx = -1;
+                $this->setInputText("");
+            }
+            $this->setInputCursor(mb_strlen($this->getInputText()));
+        }
     }
 }

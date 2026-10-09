@@ -10,9 +10,6 @@ use App\UI\EventHandler;
 use PhpTui\Term\Terminal;
 use PhpTui\Tui\DisplayBuilder;
 
-/**
- *
- */
 class Application
 {
     /** @var ?Terminal */
@@ -27,9 +24,6 @@ class Application
     /** @var LogService */
     private LogService $logService;
 
-    /**
-     *
-     */
     public function __construct(LlmService $llmService, LogService $logService)
     {
         $this->state = new AppState();
@@ -37,9 +31,6 @@ class Application
         $this->logService = $logService;
     }
 
-    /**
-     *
-     */
     public function run(): void
     {
         echo "\x1b[?25l"; // Hide native hardware cursor
@@ -47,54 +38,62 @@ class Application
         $display = DisplayBuilder::default()->build();
 
         while ($this->state->isRunning()) {
-            // Let the specialized renderers manage inner bounds and
-            // set maximum scroll limits directly in the AppState object.
             Renderer::render(
                 $display,
                 $this->state,
                 $this->state->getMaxScroll(),
             );
 
-            // Pull the cleanly computed boundaries back from your state machine
             $maxScroll = $this->state->getMaxScroll();
 
             while (null !== ($event = $this->terminal->events()->next())) {
-                $skipCycle = EventHandler::handle(
+                // FIXED: Do not drop MouseEvents, let them process inside your sub-handlers!
+
+                // FIXED: Call the handler using its explicit static signature with matching parameters
+                EventHandler::handle(
                     $event,
                     $this->terminal,
                     $this->state,
                     $this->llmService,
-                    $maxScroll, // Safely forwards the synchronized bounds to mouse listeners
+                    $maxScroll,
                     fn($msg) => $this->logService->log($msg),
                     fn() => $this->executeArtisan(),
                     $display,
                 );
 
-                // if ($skipCycle) {
-                //       continue 2;
-                //   }
+                if (!$this->state->isRunning()) {
+                    break 2;
+                }
             }
             usleep(10000);
         }
+
         $display->clear();
-        // Restore native hardware cursor
-        echo "\x1b[?25h";
+        echo "\x1b[?25h"; // Restore native hardware cursor
     }
 
     /**
-     *
+     * Executes the appropriate artisan command based on app state.
      */
     private function executeArtisan(): void
     {
         $options = $this->state->getOptions();
-        $command = env_require("CMD_DEFAULT");
 
-        if ($options["cache"]["checked"]) {
-            $command = env_require("CMD_CACHE");
-        } elseif ($options["migrate"]["checked"]) {
-            $command = $options["dryrun"]["checked"]
-                ? env_require("CMD_MIGRATE_DRY")
-                : env_require("CMD_MIGRATE");
+        $command = $_ENV["CMD_DEFAULT"] ?? "";
+
+        if (!empty($options["cache"]["checked"])) {
+            $command = $_ENV["CMD_CACHE"] ?? "";
+        } elseif (!empty($options["migrate"]["checked"])) {
+            $command = !empty($options["dryrun"]["checked"])
+                ? $_ENV["CMD_MIGRATE_DRY"] ?? ""
+                : $_ENV["CMD_MIGRATE"] ?? "";
+        }
+
+        if (empty($command)) {
+            $this->logService->log(
+                "Error: Target command environment variable is empty or missing.",
+            );
+            return;
         }
 
         $this->logService->log("Executing: $command");

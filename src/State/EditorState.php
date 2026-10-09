@@ -9,6 +9,8 @@ class EditorState
     private int $editorRow = 0;
     private int $editorCol = 0;
     private string $editorStatus = "";
+    private int $scrollX = 0;
+    private int $scrollY = 0;
 
     public function isEditorOpen(): bool
     {
@@ -104,5 +106,33 @@ class EditorState
         array_splice($this->editorLines, $this->editorRow + 1, 0, [$right]);
         $this->editorRow++;
         $this->editorCol = 0;
+    }
+
+    // 🔥 FIXED: Added the required Scroll tracking methods for your Renderer
+    public function getScrollY(): int
+    {
+        // Automatically sync viewport if row moves above top boundaries
+        if ($this->editorRow < $this->scrollY) {
+            $this->scrollY = $this->editorRow;
+        }
+        return $this->scrollY;
+    }
+
+    public function setScrollY(int $y): void
+    {
+        $this->scrollY = max(0, $y);
+    }
+
+    public function getScrollX(): int
+    {
+        if ($this->editorCol < $this->scrollX) {
+            $this->scrollX = $this->editorCol;
+        }
+        return $this->scrollX;
+    }
+
+    public function setScrollX(int $x): void
+    {
+        $this->scrollX = max(0, $x);
     }
 }

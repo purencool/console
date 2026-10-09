@@ -8,30 +8,25 @@ use PhpTui\Term\KeyModifiers;
 class CharKeyEventHandler
 {
     /**
-     * Handles typing stream mutations and alphanumeric Control hotkeys.
+     * Handles typing stream mutations safely without processing control hotkeys.
      */
     public function handle(CharKeyEvent $event, AppState $state): bool
     {
-        $isCtrl = ($event->modifiers & KeyModifiers::CONTROL) === KeyModifiers::CONTROL;
+        $isCtrl =
+            ($event->modifiers & KeyModifiers::CONTROL) ===
+            KeyModifiers::CONTROL;
 
-        // --- ALPHANUMERIC CONTROL HOTKEYS ---
+        // If it's a control sequence, let the matchEvent method handle it inside the orchestrator
         if ($isCtrl) {
-            $target = strtolower($event->char);
-            
-            if ($target === "t") {
-                $state->toggleTerminalDrawer();
-                return true;
-            }
-            if ($target === "s") {
-                $state->toggleSidebar();
-                return true;
-            }
             return false;
         }
 
-        // --- STANDARD TYPING FLOWS ---
+        // Standard alphanumeric string insertions
         if (ord($event->char) >= 32 && $event->char !== "\x7f") {
-            if ($state->isTerminalDrawerOpen() && $state->getInputFocus() === "terminal") {
+            if (
+                $state->isTerminalDrawerOpen() &&
+                $state->getInputFocus() === "terminal"
+            ) {
                 $state->insertActiveTerminalInput($event->char);
             } else {
                 $state->insertInputText($event->char);

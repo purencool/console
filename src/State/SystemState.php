@@ -10,6 +10,8 @@ class SystemState
     private bool $isProcessing = false;
     private float $processingStartTime = 0.0;
     private array $inputHistory = [];
+    private int $historyIndex = -1;
+    private string $tempInput = "";
 
     private array $options = [
         "cache" => ["label" => "Clear Cache", "checked" => false],
@@ -88,5 +90,46 @@ class SystemState
     public function addHistory(string $input): void
     {
         $this->inputHistory[] = $input;
+    }
+
+    // --- INPUT TEXT HISTORY RETRIEVAL OPERATIONS ---
+    public function historyUp(
+        callable $setInputTextCallback,
+        callable $getInputTextCallback,
+    ): void {
+        if (empty($this->inputHistory)) {
+            return;
+        }
+
+        if ($this->historyIndex === -1) {
+            $this->tempInput = $getInputTextCallback();
+        }
+
+        if ($this->historyIndex < count($this->inputHistory) - 1) {
+            $this->historyIndex++;
+            $historicalRecord =
+                $this->inputHistory[
+                    count($this->inputHistory) - 1 - $this->historyIndex
+                ];
+            $setInputTextCallback($historicalRecord);
+        }
+    }
+
+    public function historyDown(callable $setInputTextCallback): void
+    {
+        if ($this->historyIndex === -1) {
+            return;
+        }
+
+        $this->historyIndex--;
+        if ($this->historyIndex === -1) {
+            $setInputTextCallback($this->tempInput);
+        } else {
+            $historicalRecord =
+                $this->inputHistory[
+                    count($this->inputHistory) - 1 - $this->historyIndex
+                ];
+            $setInputTextCallback($historicalRecord);
+        }
     }
 }
