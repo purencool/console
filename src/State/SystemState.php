@@ -9,9 +9,12 @@ class SystemState
     private ?string $scannedPath = null;
     private bool $isProcessing = false;
     private float $processingStartTime = 0.0;
+
     private array $inputHistory = [];
     private int $historyIndex = -1;
     private string $tempInput = "";
+
+    private string $activeAiService = "";
 
     private array $options = [
         "cache" => ["label" => "Clear Cache", "checked" => false],
@@ -41,7 +44,6 @@ class SystemState
     {
         return $this->sidebarVisible;
     }
-
     public function toggleSidebar(): void
     {
         $this->sidebarVisible = !$this->sidebarVisible;
@@ -51,7 +53,6 @@ class SystemState
     {
         return $this->scannedPath;
     }
-
     public function setScannedPath(?string $path): void
     {
         $this->scannedPath = $path;
@@ -61,8 +62,7 @@ class SystemState
     {
         return $this->isProcessing;
     }
-
-    public function setProcessing(bool $processing)
+    public function setProcessing(bool $processing): void
     {
         $this->isProcessing = $processing;
         if ($processing) {
@@ -79,7 +79,6 @@ class SystemState
     {
         return $this->options;
     }
-
     public function toggleOption(string $key): void
     {
         if (isset($this->options[$key])) {
@@ -87,12 +86,21 @@ class SystemState
         }
     }
 
+    public function getActiveAiService(): string
+    {
+        return $this->activeAiService;
+    }
+    public function setActiveAiService(string $serviceId): void
+    {
+        $this->activeAiService = $serviceId;
+    }
+
     public function addHistory(string $input): void
     {
         $this->inputHistory[] = $input;
+        $this->historyIndex = -1;
     }
 
-    // --- INPUT TEXT HISTORY RETRIEVAL OPERATIONS ---
     public function historyUp(
         callable $setInputTextCallback,
         callable $getInputTextCallback,
@@ -100,11 +108,9 @@ class SystemState
         if (empty($this->inputHistory)) {
             return;
         }
-
         if ($this->historyIndex === -1) {
             $this->tempInput = $getInputTextCallback();
         }
-
         if ($this->historyIndex < count($this->inputHistory) - 1) {
             $this->historyIndex++;
             $historicalRecord =
@@ -120,7 +126,6 @@ class SystemState
         if ($this->historyIndex === -1) {
             return;
         }
-
         $this->historyIndex--;
         if ($this->historyIndex === -1) {
             $setInputTextCallback($this->tempInput);

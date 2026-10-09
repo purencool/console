@@ -7,6 +7,9 @@ use PhpTui\Term\KeyCode;
 
 class NavigationHandler
 {
+    /**
+     * Processes scrolling keys alongside historical up/down recall arrow keys.
+     */
     public function handle(
         CodedKeyEvent $event,
         AppState $state,
@@ -37,6 +40,26 @@ class NavigationHandler
                 $state->backspaceInputText();
             }
             return true;
+        }
+
+        // --- ARROW KEY ACTIONS (HISTORY & CURSOR MANAGEMENT) ---
+        if ($event->code === KeyCode::Up) {
+            if (
+                $state->getInputFocus() === "chat" &&
+                method_exists($state, "historyUp")
+            ) {
+                $state->historyUp();
+                return true;
+            }
+        }
+        if ($event->code === KeyCode::Down) {
+            if (
+                $state->getInputFocus() === "chat" &&
+                method_exists($state, "historyDown")
+            ) {
+                $state->historyDown();
+                return true;
+            }
         }
 
         if ($event->code === KeyCode::Left) {

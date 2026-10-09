@@ -24,15 +24,26 @@ if (!file_exists($envPath)) {
 $dotenv = Dotenv::createImmutable(__DIR__ . "/..");
 $dotenv->load();
 
-$llmChatCmd = env_require("LLM_CHAT_CMD");
-$skillsCmd = env_require("SKILLS_CMD");
-
-// 💡 Using realpath to guarantee the path resolving works from any working directory
-$logFile = dirname(__DIR__) . "/error.log";
+/**
+ * Config
+ */
+$destination = __DIR__ . "/../.config/";
+// Check if the destination file does NOT exist
+if (!dir_exists($destination)) {
+    $source = __DIR__ . "/../config";
+    if (copy($source, $destination)) {
+        echo "File copied successfully.";
+    } else {
+        echo "Failed to copy the file.";
+    }
+} else {
+    echo "Destination dir already exists. Copy skipped.";
+}
 
 /**
- * 💡 The absolute foolproof crash renderer
+ * The absolute foolproof crash renderer
  */
+$logFile = dirname(__DIR__) . "./.config/error.log";
 $terminalCrashHandler = function (\Throwable $e) use ($logFile) {
     // 1. Force the terminal out of the alternate screen buffer and reset attributes
     echo "\x1b[?1049l"; // Exit alternate screen
@@ -46,7 +57,7 @@ $terminalCrashHandler = function (\Throwable $e) use ($logFile) {
 
     echo "\n\x1b[1;31m=== APPLICATION CRASH DETECTED ===\x1b[0m\n";
 
-    $timestamp = date("Y-m-d H:i:s");
+    $timestamp = date("Y-m-d H:m:s");
     $errorMessage = sprintf(
         "[%s] %s: %s\nFile: %s\nLine: %d\n",
         $timestamp,
@@ -57,10 +68,10 @@ $terminalCrashHandler = function (\Throwable $e) use ($logFile) {
     );
     $trace = $e->getTraceAsString();
 
-    // 2. Visible standard output directly to your prompt screen
+    // Visible standard output directly to your prompt screen
     echo $errorMessage . "\n" . $trace . "\n\n";
 
-    // 3. Robust atomic log file writing
+    // Robust atomic log file writing
     @file_put_contents(
         $logFile,
         $errorMessage . "\n" . $trace . "\n\n",
@@ -93,9 +104,7 @@ set_exception_handler($terminalCrashHandler);
 // 🔥 THE BULLETPROOF JACKET: Ensure runtime setup can't exit raw mode silently
 try {
     $logService = new LogService();
-    $llmService = new LlmService($llmChatCmd, $skillsCmd);
-
-    $app = new Application($llmService, $logService);
+    $app = new Application($logService);
     $app->run();
 } catch (\Throwable $fatalRuntimeError) {
     // If anything breaks inside the application run loop, intercept it here manually

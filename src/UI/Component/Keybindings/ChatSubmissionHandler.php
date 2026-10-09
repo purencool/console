@@ -1,80 +1,79 @@
 <?php
 namespace App\UI\Component\Keybindings;
-
 use App\State\AppState;
-use App\Services\LlmService;
 use App\Services\KeyBindingService;
 use App\Services\SnippetService;
-
+use App\Services\ConfigManager;
+use App\Services\JsonService;
 class ChatSubmissionHandler
 {
-    public function handle(
-        AppState $state,
-        LlmService $llmService,
-        callable $logger,
-    ): bool {
+    public function handle(AppState $state, callable $logger): bool
+    {
         $keyBinding = new KeyBindingService();
+        $configManager = new ConfigManager();
+        $jsonService = new JsonService();
         $rawInput = $state->getInputText();
-
-        // Handle /n multiline mapping transformations safely
         $processedInput = $keyBinding->replaceCommandNew($rawInput, "\n");
         $promptText = trim($processedInput);
-
         if ($promptText === "") {
             return false;
         }
 
-        // Output input buffer directly to the local terminal view panel
-        $state->addChatMessage("You: " . $promptText);
-        $state->setInputText("");
-        $state->setAutoScroll(true);
+        if ($promptText === "/ai see") {
+            $state->addChatMessage("You: /ai see");
+            $state->addChatMessage("[System] Registered AI Services Matrix:");
+            $aiServices = $configManager->getServicesByCategory("ai");
+            $activeService = $state->getActiveAiService();
+            if (empty($aiServices)) {
+                $state->addChatMessage(
+                    "  (No services registered in SERVICES_CONFIG)",
+                );
+                return true;
+            }
+            foreach ($aiServices as $id => $meta) {
+                $marker = $id === $activeService ? "➔ [ACTIVE]" : "  ";
+                $state->addChatMessage(
+                    sprintf(
+                        "%s %s (Type: %s, Method: %s, Endpoint: %s)",
+                        $marker,
+                        $id,
+                        $meta["type"] ?? "unknown",
+                        $meta["method"] ?? "POST",
+                        $meta["endpoint"] ?? "none",
+                    ),
+                );
+            }
+            return true;
+        }
 
-        // --- COMMAND ROUTING PARSING MATRIX ---
-
+        if (str_starts_with($promptText, "/ai change ")) {
+            $targetService = trim(substr($promptText, strlen("/ai change ")));
+            $state->addChatMessage("You: " . $promptText);
+            $aiServices = $configManager->getServicesByCategory("ai");
+            if (!isset($aiServices[$targetService])) {
+                $state->addChatMessage(
+                    "[Error] Service '{$targetService}' is not defined inside your SERVICES_CONFIG .env blocks.",
+                );
+                return true;
+            }
+            $state->setActiveAiService($targetService);
+            $state->addChatMessage(
+                "[System] Successfully swapped runtime active AI configuration link to: " .
+                    $targetService,
+            );
+            return true;
+        }
+        // Standard fallbacks (help, edit, snippets)
         if ($keyBinding->isHelpCommand($promptText)) {
+            $state->addChatMessage("You: " . $promptText);
             $state->addChatMessage("[System] Application Help & Shortcuts:");
             foreach ($keyBinding->getHelpOptions() as $option) {
                 $state->addChatMessage($option);
             }
             return true;
         }
-
-        if ($keyBinding->isPathCommand($promptText)) {
-            $path = $keyBinding->extractPathFromCommand($promptText);
-            if (empty($path) || !file_exists($path)) {
-                $state->addChatMessage(
-                    "[Error] Provided target path is invalid or non-existent.",
-                );
-            } else {
-                $state->setScannedPath($path);
-                $state->addChatMessage(
-                    "[System] Successfully updated scan tracking root path target to: " .
-                        realpath($path),
-                );
-            }
-            return true;
-        }
-
-        if ($keyBinding->isSaveCommand($promptText)) {
-            $path = $keyBinding->extractSavePathFromCommand($promptText);
-            if (empty($path)) {
-                $path = "chat_export_" . date("Ymd_His") . ".txt";
-            }
-            $logData = implode("\n", $state->getChatLog());
-            if (@file_put_contents($path, $logData) !== false) {
-                $state->addChatMessage(
-                    "[System] Chat logs successfully written to disk filename path target: " .
-                        $path,
-                );
-            } else {
-                $state->addChatMessage(
-                    "[Error] Failed to write chat logs to filesystem target path context location.",
-                );
-            }
-            return true;
-        }
-
         if ($keyBinding->isEditCommand($promptText)) {
+            $state->addChatMessage("You: " . $promptText);
             $filePath = $keyBinding->extractEditPath($promptText);
             if (empty($filePath)) {
                 $state->addChatMessage(
@@ -92,6 +91,7 @@ class ChatSubmissionHandler
         }
 
         if ($keyBinding->isSnippetCommand($promptText)) {
+            $state->addChatMessage("You: " . $promptText);
             $snippetName = $keyBinding->extractSnippetName($promptText);
             if (empty($snippetName) || $snippetName === "list") {
                 $state->addChatMessage("[System] Available snippets:");
@@ -109,33 +109,42 @@ class ChatSubmissionHandler
             return true;
         }
 
-        if ($keyBinding->isSkillsSeeCommand($promptText)) {
-            $sys = method_exists($state, "getLoadedSystemSkills")
-                ? implode(", ", $state->getLoadedSystemSkills())
-                : "None";
-            $usr = method_exists($state, "getLoadedUserSkills")
-                ? implode(", ", $state->getLoadedUserSkills())
-                : "None";
-            $state->addChatMessage("[System] Loaded System Skills: $sys");
-            $state->addChatMessage("[System] Loaded User Skills: $usr");
+        if (!str_starts_with($promptText, "/")) {
+            $state->addChatMessage("You: " . $promptText);
+            $state->setInputText("");
+            $state->setAutoScroll(true);
+            $activeService = $state->getActiveAiService();
+            $state->setProcessing(true);
+            $logger(
+                "Routing request dynamically via driver strategy: " .
+                    $activeService,
+            );
+            try {
+                $result = $jsonService->makeCall(
+                    "ai",
+                    $activeService,
+                    "llm_chat",
+                    $promptText,
+                );
+                if (isset($result["success"]) && $result["success"]) {
+                    $state->addChatMessage(
+                        "[Agent] " . implode("\n", $result["output"]),
+                    );
+                } else {
+                    $state->addChatMessage(
+                        "[Error] " . implode("\n", $result["output"]),
+                    );
+                }
+            } catch (\Throwable $e) {
+                $state->addChatMessage(
+                    "[Error] Invocation target routing failed: " .
+                        $e->getMessage(),
+                );
+            } finally {
+                $state->setProcessing(false);
+            }
             return true;
         }
-
-        // --- CORE BACKEND LLM CALL BACKBONE ---
-        $state->setProcessing(true);
-        $logger("Sending query to LLM: " . $promptText);
-
-        try {
-            $response = $llmService->chat($promptText, $state);
-            $state->addChatMessage("[Agent] " . $response);
-        } catch (\Throwable $e) {
-            $state->addChatMessage(
-                "[Error] Exception execution block: " . $e->getMessage(),
-            );
-        } finally {
-            $state->setProcessing(false);
-        }
-
-        return true;
+        return false;
     }
 }

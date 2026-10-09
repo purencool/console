@@ -2,7 +2,6 @@
 namespace App;
 
 use App\State\AppState;
-use App\Services\LlmService;
 use App\Services\LogService;
 use App\Support\TerminalSetup;
 use App\UI\Renderer;
@@ -18,16 +17,12 @@ class Application
     /** @var AppState */
     private AppState $state;
 
-    /** @var LlmService */
-    private LlmService $llmService;
-
     /** @var LogService */
     private LogService $logService;
 
-    public function __construct(LlmService $llmService, LogService $logService)
+    public function __construct(LogService $logService)
     {
         $this->state = new AppState();
-        $this->llmService = $llmService;
         $this->logService = $logService;
     }
 
@@ -47,14 +42,10 @@ class Application
             $maxScroll = $this->state->getMaxScroll();
 
             while (null !== ($event = $this->terminal->events()->next())) {
-                // FIXED: Do not drop MouseEvents, let them process inside your sub-handlers!
-
-                // FIXED: Call the handler using its explicit static signature with matching parameters
                 EventHandler::handle(
                     $event,
                     $this->terminal,
                     $this->state,
-                    $this->llmService,
                     $maxScroll,
                     fn($msg) => $this->logService->log($msg),
                     fn() => $this->executeArtisan(),

@@ -1,0 +1,63 @@
+{
+ "ai":{
+      "default": {
+         "endpoint":"php ./tests/endpoint.php",
+         "key":"",
+         "method":"POST",
+         "type": "shell",
+         "cmds":{}
+      },
+      "service_two": {
+         "endpoint":"php ./tests/endpoint.php",
+         "type": "http",
+         "method":"POST",
+         "cmds":{}
+      }
+    },
+  "skills": {
+    "skills_default": {
+         "endpoint":"php ./tests/endpoint.php",
+         "key":"",
+         "method":"",
+         "cmds":{}
+     },
+    "skills_second": {
+        "endpoint":"",
+        "key":"",
+        "method":"",
+        "cmds":{}
+      }
+    },
+  "commands": {
+    "agents": {
+         "endpoint":"",
+         "key":"",
+         "method":"",
+         "cmds":{}
+      },
+      "mcp": {
+         "endpoint":"",
+         "key":"",
+         "method":"",
+         "cmds":{}
+      },
+      "client": {
+         "endpoint":"",
+         "key":"",
+         "method":"",
+         "cmds":{}
+      },
+      "website": {
+         "endpoint":"",
+         "key":"",
+         "method":"",
+         "cmds":{}
+      },
+      "communication": {
+         "endpoint":"",
+         "key":"",
+         "method":"",
+         "cmds":{}
+      }
+  }
+}

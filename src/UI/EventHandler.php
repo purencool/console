@@ -2,7 +2,6 @@
 namespace App\UI;
 
 use App\State\AppState;
-use App\Services\LlmService;
 use App\Services\KeyBindingService;
 use App\UI\Component\EditorEventHandler;
 use App\UI\Component\CharKeyEventHandler;
@@ -23,7 +22,6 @@ class EventHandler
         Event $event,
         Terminal $terminal,
         AppState $state,
-        LlmService $llmService,
         int $maxScroll,
         callable $logger,
         callable $artisanRunner,
@@ -121,13 +119,7 @@ class EventHandler
             if (new TerminalSubmissionHandler()->handle($state)) {
                 return true;
             }
-            if (
-                new ChatSubmissionHandler()->handle(
-                    $state,
-                    $llmService,
-                    $logger,
-                )
-            ) {
+            if (new ChatSubmissionHandler()->handle($state, $logger)) {
                 return true;
             }
         }

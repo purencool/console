@@ -8,23 +8,11 @@ namespace App\Services;
  */
 class LlmService
 {
-    /** @var string */
-    private string $llmChatCmd;
-
-    /** @var string */
-    private string $skillsCmd;
-
     /**
-     * @param string $llmChatCmd
-     * @param string $skillsCmd
      *
      * @throws \Exception
      */
-    public function __construct(string $llmChatCmd, string $skillsCmd)
-    {
-        $this->llmChatCmd = $llmChatCmd;
-        $this->skillsCmd = $skillsCmd;
-    }
+    public function __construct() {}
 
     /**
      * Query completes the following actions:
@@ -41,19 +29,10 @@ class LlmService
      */
     public function query(string $promptText): array
     {
-        if (str_starts_with($promptText, "/")) {
-            $cmd =
-                $promptText === "/skills"
-                    ? $this->skillsCmd
-                    : substr($promptText, 1);
-            return [$cmd, "[System] Running: $cmd"];
-        } else {
-            $jsonPayload = json_encode(
-                ["prompt" => $promptText],
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
-            );
-            $cmd = $this->llmChatCmd . escapeshellarg($jsonPayload);
-            return [$cmd, "[Agent] Thinking..."];
-        }
+        return [
+            "system" => "",
+            "user" => "",
+            "request" => "",
+        ];
     }
 }

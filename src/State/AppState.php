@@ -98,6 +98,15 @@ class AppState
         $this->system->addHistory($input);
     }
 
+    public function getActiveAiService(): string
+    {
+        return $this->system->getActiveAiService();
+    }
+    public function setActiveAiService(string $serviceId): void
+    {
+        $this->system->setActiveAiService($serviceId);
+    }
+
     public function historyUp(): void
     {
         $this->system->historyUp(
@@ -168,12 +177,10 @@ class AppState
     {
         $this->chat->setAutoScroll($auto);
     }
-
     public function recordChatSubmission(string $input): void
     {
         $this->chat->recordSubmission($input);
     }
-
     public function cycleChatHistory(bool $up): void
     {
         $this->chat->cycleHistory($up);
@@ -236,7 +243,6 @@ class AppState
     {
         $this->terminal->cycleHistory($up);
     }
-
     // --- EDITOR CONTEXT PASS-THROUGHS ---
     public function isEditorOpen(): bool
     {
@@ -297,23 +303,5 @@ class AppState
     public function enterEditorLine(): void
     {
         $this->editor->enterEditorLine();
-    }
-
-    // --- EDITOR VIEWPORT SCROLL LAYER PIPELINE ---
-    public function getEditorScrollY(): int
-    {
-        return $this->editor->getScrollY();
-    }
-    public function getEditorScrollX(): int
-    {
-        return $this->editor->getScrollX();
-    }
-    public function setEditorScrollY(int $y): void
-    {
-        $this->editor->setScrollY($y);
-    }
-    public function setEditorScrollX(int $x): void
-    {
-        $this->editor->setScrollX($x);
     }
 }
