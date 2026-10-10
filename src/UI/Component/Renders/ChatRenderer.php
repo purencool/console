@@ -34,15 +34,11 @@ class ChatRenderer
 
         $wrappedChatLog = [];
         $chatLogArray = $state->getChatLog();
-        $chatLogCount = count($chatLogArray);
-
-        // Wrap Chat Messages dynamically
-        foreach ($chatLogArray as $idx => $logLine) {
+        foreach ($chatLogArray as $logLine) {
             foreach (ReflectionHelper::wrapText($logLine, $innerWidth) as $wl) {
-                $wrappedChatLog[] = $wl;
-            }
-            if ($idx < $chatLogCount - 1) {
-                $wrappedChatLog[] = "";
+                if (trim($wl) !== "") {
+                    $wrappedChatLog[] = $wl;
+                }
             }
         }
 
@@ -60,6 +56,8 @@ class ChatRenderer
             );
         }
 
+        // --- Inside src/UI/Component/Renders/ChatRenderer.php ---
+
         // Dynamic Viewport Window Scroll Calculations
         $totalLines = count($wrappedChatLog);
         $maxScroll = max(0, $totalLines - $sliceChatHeight);
@@ -68,18 +66,34 @@ class ChatRenderer
             $state->setMaxScroll($maxScroll);
         }
 
-        if (
-            method_exists($state, "isAutoScroll") &&
-            $state->isAutoScroll() &&
-            !$state->isProcessing()
-        ) {
+        $logPath = dirname(__DIR__, 4) . "/.config/error.log";
+        $initialOffset = $state->getScrollOffset();
+        $autoScrollState = $state->isAutoScroll() ? "TRUE" : "FALSE";
+
+        // If auto-scroll is locked on, it forces the view to the bottom lines
+        if (method_exists($state, "isAutoScroll") && $state->isAutoScroll()) {
             $state->setScrollOffset($maxScroll);
         }
 
+        // Clamp the scroll boundaries within safe ranges
         $currentScroll = min(max(0, $state->getScrollOffset()), $maxScroll);
         if (method_exists($state, "setScrollOffset")) {
             $state->setScrollOffset($currentScroll);
         }
+
+        // 🔍 LOG OUTPUT TRACKING MAP
+        @file_put_contents(
+            $logPath,
+            sprintf(
+                "[Renderer Loop] Total Lines: %d | Max Scroll Ceiling: %d | Incoming Offset: %d | Final Offset: %d | AutoScroll: %s\n",
+                $totalLines,
+                $maxScroll,
+                $initialOffset,
+                $currentScroll,
+                $autoScrollState,
+            ),
+            FILE_APPEND,
+        );
 
         $visibleLog = array_slice(
             $wrappedChatLog,

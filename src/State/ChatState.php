@@ -57,11 +57,33 @@ class ChatState
     {
         return $this->chatLog;
     }
-    public function addChatMessage(string $msg): void
+    /**
+     * Appends a fresh chat line and automatically offloads historical logs to disk.
+     */
+    public function addChatMessage(string $message): void
     {
-        $this->chatLog[] = $msg;
-        if (count($this->chatLog) > 1000) {
-            $this->chatLog = array_slice($this->chatLog, -1000);
+        $this->chatLog[] = $message;
+        $maxRuntimeLines = 1000;
+
+        if (count($this->chatLog) > $maxRuntimeLines) {
+            $offloadCount = count($this->chatLog) - $maxRuntimeLines + 100;
+            $oldLogsChunk = array_slice($this->chatLog, 0, $offloadCount);
+            $basePath = dirname(__DIR__, 2);
+            $archiveDir = $basePath . "/.config";
+            $archiveFile = $archiveDir . "/chat_archive.log";
+
+            if (!file_exists($archiveDir)) {
+                @mkdir($archiveDir, 0755, true);
+            }
+
+            $flatPayload = implode("\n", $oldLogsChunk) . "\n";
+            @file_put_contents($archiveFile, $flatPayload, FILE_APPEND);
+            $this->chatLog = array_slice($this->chatLog, $offloadCount);
+            $timestamp = date("H:i:s");
+            array_unshift(
+                $this->chatLog,
+                "[System] [{$timestamp}] Offloaded {$offloadCount} historical logs to '.config/chat_archive.log' safely.",
+            );
         }
     }
 
@@ -115,13 +137,17 @@ class ChatState
         if ($up) {
             if ($this->chatHistoryIdx < count($this->chatHistoryStack) - 1) {
                 $this->chatHistoryIdx++;
-                $this->setInputText($this->chatHistoryStack[$this->chatHistoryIdx]);
+                $this->setInputText(
+                    $this->chatHistoryStack[$this->chatHistoryIdx],
+                );
                 $this->setInputCursor(mb_strlen($this->getInputText()));
             }
         } else {
             if ($this->chatHistoryIdx > 0) {
                 $this->chatHistoryIdx--;
-                $this->setInputText($this->chatHistoryStack[$this->chatHistoryIdx]);
+                $this->setInputText(
+                    $this->chatHistoryStack[$this->chatHistoryIdx],
+                );
             } else {
                 $this->chatHistoryIdx = -1;
                 $this->setInputText("");

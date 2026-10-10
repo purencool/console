@@ -97,18 +97,27 @@ class TerminalLayoutService
         ];
     }
 
+    /**
+     * Computes and saves vertical pane split segments state parameters into centralized memory.
+     */
     public function calculatePaneHeights(
         int $termHeight,
         int $inputBoxHeight,
         bool $isTerminalOpen,
         int $vPad,
     ): array {
+        // Calculate the rows allocated to the terminal drawer (40% of screen)
         $drawerHeight = $isTerminalOpen ? (int) ($termHeight * 0.4) : 0;
-        $visibleChatHeight = max(
-            5,
-            $termHeight - $inputBoxHeight - $drawerHeight - 2,
-        );
-        $this->sliceChatHeight = max(1, $visibleChatHeight - $vPad * 2);
+
+        // Subtract structural borders (4) + padding loops ($vPad * 2)
+        $decorationOverhead = 4 + $vPad * 2 - 2;
+
+        // Isolate the exact rows left over for the chat log area text rows
+        $visibleChatHeight =
+            $termHeight - $inputBoxHeight - $drawerHeight - $decorationOverhead;
+
+        // Save the exact printable text row split tightly to memory
+        $this->sliceChatHeight = max(1, $visibleChatHeight);
 
         return [
             "drawerHeight" => $drawerHeight,

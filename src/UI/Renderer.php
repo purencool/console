@@ -26,7 +26,7 @@ class Renderer
         /** @var TerminalLayoutService $layoutService */
         $layoutService = $services["layout"];
 
-        //Gather Terminal Parameters & Presentation Metrics
+        // Gather Terminal Parameters & Presentation Metrics
         $dims = $layoutService->getDimensions($display);
         $showCursor = $layoutService->shouldShowCursor();
         $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
@@ -48,6 +48,15 @@ class Renderer
             $geometry["innerWidth"],
             $layoutService->getSpanClass(),
             $layoutService->getBgStyle(),
+        );
+
+        // 💡 FIXED: Restore the dynamic height split calculations calculation right here!
+        // This calculates inner parameters and updates the Layout Service prior to rendering the Chat block.
+        $layoutService->calculatePaneHeights(
+            $dims["height"],
+            $inputData["height"],
+            $state->isTerminalDrawerOpen(),
+            $metrics["vPad"],
         );
 
         // Dynamic Title Retrieval via Layout Service
