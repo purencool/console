@@ -16,14 +16,13 @@ class LayoutRenderer
      *
      * @param array<string, object> $services Centralised system dependency registry
      * @param array<object> $leftWidgets Aggregated panel widget matrix stack structures
+     * @param array $inputData Pre-compiled lines array data package from the input box
      */
     public function render(
         object $display,
         array $services,
         array $leftWidgets,
-        int $termHeight,
-        int $inputBoxHeight,
-        int $terminalDrawerHeight,
+        array $inputData,
     ): void {
         /** @var AppState $state */
         $state = $services["state"];
@@ -31,10 +30,22 @@ class LayoutRenderer
         /** @var TerminalLayoutService $layoutService */
         $layoutService = $services["layout"];
 
-        // Dynamically read padding and design tokens from the layout service
+        // Dynamically read hardware dimensions and layout splits from services
+        $dims = $layoutService->getDimensions($display);
         $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
+
+        $termHeight = $dims["height"];
         $vPad = $metrics["vPad"] ?? 1;
         $hPadStr = $metrics["hPadStr"] ?? " ";
+
+        //  Calculate dynamic heights locally out of pre-computed arrays & state references
+        $inputBoxHeight =
+            $inputData["height"] ?? min(15, max(5, count($inputData["lines"])));
+
+        // Re-compute the exact split ratio partitioning matching TerminalRenderer bounds rules
+        $terminalDrawerHeight = $state->isTerminalDrawerOpen()
+            ? (int) ($termHeight * 0.4)
+            : 0;
 
         // Resolve Dynamic Reflection Framework Adapters
         [
