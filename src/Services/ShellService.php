@@ -12,6 +12,34 @@ use ValueError;
 class ShellService
 {
     /**
+     * Executes a background command and returns its output.
+     * This provides the missing method required by TerminalSubmissionHandler.
+     *
+     * @param string $command
+     * @return string
+     */
+    public function execute(string $command): string
+    {
+        // Define the command execution fallback logic directly
+        // This bypasses the interactive ShellService registry layer entirely
+        try {
+            // Check if shell_exec is disabled in php.ini
+            if (function_exists("shell_exec")) {
+                $output = shell_exec($command . " 2>&1");
+                $output = $output !== null ? (string) $output : "";
+            } else {
+                $output =
+                    "[System Error] The 'shell_exec' function is disabled on this server.";
+            }
+        } catch (\Throwable $e) {
+            $output =
+                "[Execution Error] Failed to run command: " . $e->getMessage();
+        }
+
+        return $output;
+    }
+
+    /**
      * SuspendProcess completes the action by suspending the current process.
      * This is useful for temporarily pausing the TUI session and running a
      * command in a separate shell environment.

@@ -118,6 +118,7 @@ try {
         "layout" => new \App\Services\TerminalLayoutService(),
         "llm" => new \App\Services\LlmService(),
         "state" => new \App\State\AppState($config),
+        "mouse" => new \App\Services\MouseInteractionService(),
     ];
 
     $app = new Application($services);

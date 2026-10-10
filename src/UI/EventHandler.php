@@ -8,7 +8,8 @@ use App\UI\Component\CharKeyEventHandler;
 use App\UI\Component\Keybindings\NavigationHandler;
 use App\UI\Component\Keybindings\TerminalSubmissionHandler;
 use App\UI\Component\Keybindings\ChatSubmissionHandler;
-use App\UI\Component\MouseEventHandler;
+use App\Services\LogService;
+use App\Services\MouseInteractionService;
 use PhpTui\Term\Event;
 use PhpTui\Term\Event\CharKeyEvent;
 use PhpTui\Term\Event\CodedKeyEvent;
@@ -24,13 +25,16 @@ class EventHandler
         Event $event,
         array $services,
         int $maxScroll,
+        object $display,
     ): bool {
         /** @var AppState $state */
         $state = $services["state"];
         /** @var KeyBindingService $bindingService */
         $bindingService = $services["keybindings"];
-        /** @var \App\Services\LogService $logger */
+        /** @var LogService $logger */
         $logger = $services["log"];
+        /** @var MouseInteractionService $mouseService */
+        $mouseService = $services["mouse"];
 
         // Delegate full-screen text editor input intercepts
         if (new EditorEventHandler()->handle($event, $services)) {
@@ -44,7 +48,12 @@ class EventHandler
         // Delegate hardware mouse interactions
         if ($event instanceof MouseEvent) {
             if (
-                new MouseEventHandler()->handle($event, $services, $maxScroll)
+                $mouseService->handleEvent(
+                    $event,
+                    $services,
+                    $maxScroll,
+                    $display,
+                )
             ) {
                 return true;
             }
@@ -73,25 +82,18 @@ class EventHandler
                     return true;
 
                 case KeyBindingService::ACTION_HISTORY_UP:
-                    if (method_exists($state, "historyUp")) {
-                        $state->historyUp();
-                        $logger->log(
-                            sprintf(
-                                "[Trace History] Prompt recalled UP: '%s'",
-                                $state->getInputText(),
-                            ),
+                    if ($state->getInputFocus() === "chat") {
+                        $state->historyUp(
+                            fn($text) => $state->setInputText($text),
+                            fn() => $state->getInputText(),
                         );
                     }
                     return true;
 
                 case KeyBindingService::ACTION_HISTORY_DOWN:
-                    if (method_exists($state, "historyDown")) {
-                        $state->historyDown();
-                        $logger->log(
-                            sprintf(
-                                "[Trace History] Prompt recalled DOWN: '%s'",
-                                $state->getInputText(),
-                            ),
+                    if ($state->getInputFocus() === "chat") {
+                        $state->historyDown(
+                            fn($text) => $state->setInputText($text),
                         );
                     }
                     return true;

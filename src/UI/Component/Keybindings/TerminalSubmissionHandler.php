@@ -33,9 +33,7 @@ class TerminalSubmissionHandler
 
             // Forward execution task securely through your injected shell service registry layer
             $shell = $services["shell"] ?? null;
-            $output = $shell
-                ? $shell->execute($command)
-                : shell_exec($command . " 2>&1");
+            $output = $shell->execute($command);
 
             if ($output !== null && trim($output) !== "") {
                 foreach (explode("\n", rtrim($output)) as $outputLine) {

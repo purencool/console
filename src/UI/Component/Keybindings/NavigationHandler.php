@@ -7,7 +7,7 @@ use PhpTui\Term\Event\CodedKeyEvent;
 class NavigationHandler
 {
     /**
-     * Processes viewport scrolling modifiers alongside historical up/down recall arrow keys.
+     * Processes viewport scrolling modifiers alongside structural navigation cursor adjustments.
      *
      * @param array<string, object> $services Centralised system dependency registry
      */
@@ -19,12 +19,9 @@ class NavigationHandler
         /** @var AppState $state */
         $state = $services["state"];
 
-        // Synchronise Dynamic Scroll Bounds
         $maxScroll = method_exists($state, "getMaxScroll")
             ? $state->getMaxScroll()
             : $maxScroll;
-
-        // Enum-Safe String Identification Mapping Extraction
         $codeName =
             is_object($event->code) && property_exists($event->code, "name")
                 ? $event->code->name
@@ -53,24 +50,6 @@ class NavigationHandler
                     $state->backspaceActiveTerminalInput();
                 } else {
                     $state->backspaceInputText();
-                }
-                return true;
-
-            case "Up":
-                if (
-                    $state->getInputFocus() === "chat" &&
-                    method_exists($state, "historyUp")
-                ) {
-                    $state->historyUp();
-                }
-                return true;
-
-            case "Down":
-                if (
-                    $state->getInputFocus() === "chat" &&
-                    method_exists($state, "historyDown")
-                ) {
-                    $state->historyDown();
                 }
                 return true;
 

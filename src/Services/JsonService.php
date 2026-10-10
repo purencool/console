@@ -9,18 +9,18 @@ class JsonService
     /**
      * Executes an infrastructure adapter routing task using pre-compiled AppState system drivers.
      *
-     * @param AppState $state The global application state object container
+     * @param array $services The global application state object container
      * @param string $category The target system module category context (e.g., 'ai', 'skills', 'commands')
      * @param string $input Explicit text parameters or user strings bound to the context query
      * @return array Standardised unified format array output containing response metrics
      */
     public function makeCall(
-        AppState $state,
+        array $services,
         string $category,
         string $input = "",
     ): array {
-        print_r($state);
-        exit();
+        /** @var AppState $state */
+        $state = $services["state"];
         // Dynamically read the active configuration profile from the state machine's compiled registry
         $driverProfile = method_exists($state, "getDriverProfile")
             ? $state->getDriverProfile($category)

@@ -4,6 +4,8 @@ namespace App;
 use App\Support\TerminalSetup;
 use App\UI\Renderer;
 use App\UI\EventHandler;
+use App\State\AppState;
+use App\Services\LogService;
 use PhpTui\Term\Terminal;
 use PhpTui\Tui\DisplayBuilder;
 
@@ -28,9 +30,9 @@ class Application
      */
     public function run(): void
     {
-        /** @var \App\State\AppState $state */
+        /** @var AppState $state */
         $state = $this->services["state"];
-        /** @var \App\Services\LogService $logger */
+        /** @var LogService $logger */
         $logger = $this->services["log"];
 
         echo "\x1b[?25l"; // Hide native hardware cursor
@@ -45,7 +47,12 @@ class Application
             $uiRenderer->render($display, $this->services);
 
             while (null !== ($event = $this->terminal->events()->next())) {
-                EventHandler::handle($event, $this->services, $maxScroll);
+                EventHandler::handle(
+                    $event,
+                    $this->services,
+                    $maxScroll,
+                    $display,
+                );
                 if (!$state->isRunning()) {
                     break 2;
                 }
@@ -56,48 +63,5 @@ class Application
 
         $display->clear();
         echo "\x1b[?25h"; // Restore native hardware cursor
-    }
-
-    /**
-     * Executes the configured background command strings matching selected option layers.
-     */
-    private function executeArtisan(): void
-    {
-        /** @var \App\State\AppState $state */
-        $state = $this->services["state"];
-        /** @var \App\Services\LogService $logger */
-        $logger = $this->services["log"];
-
-        $options = $state->getOptions();
-        $command = $_ENV["CMD_DEFAULT"] ?? "";
-
-        if (!empty($options["cache"]["checked"])) {
-            $command = $_ENV["CMD_CACHE"] ?? "";
-        } elseif (!empty($options["migrate"]["checked"])) {
-            $command = !empty($options["dryrun"]["checked"])
-                ? $_ENV["CMD_MIGRATE_DRY"] ?? ""
-                : $_ENV["CMD_MIGRATE"] ?? "";
-        }
-
-        if (empty($command)) {
-            $logger->log(
-                "Error: Target command environment variable is empty or missing.",
-            );
-            return;
-        }
-
-        $logger->log("Executing: $command");
-        $state->addChatMessage("[System] Executing: $command");
-
-        $output = shell_exec($command . " 2>&1");
-        if ($output === null || trim($output) === "") {
-            $state->addChatMessage(" > (No output returned)");
-        } else {
-            foreach (explode("\n", rtrim($output)) as $line) {
-                $state->addChatMessage($line);
-            }
-        }
-
-        $state->setAutoScroll(true);
     }
 }

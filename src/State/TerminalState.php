@@ -95,7 +95,7 @@ class TerminalState
     /**
      * Records submitted terminal command text to the internal historical stack.
      */
-    public function recordSubmission(string $input): void
+    public function recordTermSubmission(string $input): void
     {
         if (trim($input) !== "") {
             array_unshift($this->termHistoryStack, $input);

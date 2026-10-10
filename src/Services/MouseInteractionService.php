@@ -1,17 +1,17 @@
 <?php
-namespace App\UI\Component;
+namespace App\Services;
 
 use App\State\AppState;
 use PhpTui\Term\Event\MouseEvent;
 
-class MouseEventHandler
+class MouseInteractionService
 {
     /**
-     * Handles coordinate grid wheel scrolling events across terminal viewports.
+     * Translates hardware mouse coordinates and wheel signals into state adjustments.
      *
      * @param array<string, object> $services Centralised system dependency registry
      */
-    public function handle(
+    public function handleEvent(
         MouseEvent $event,
         array $services,
         int $maxScroll,
@@ -20,12 +20,17 @@ class MouseEventHandler
         /** @var AppState $state */
         $state = $services["state"];
 
-        // Extract action signatures safely across various PhpTui library releases
-        $kindName = isset($event->kind->name)
-            ? $event->kind->name
-            : (isset($event->action->name)
-                ? $event->action->name
-                : "");
+        // Use property_exists to prevent indefined Property warnings
+        $kindName = "";
+        if (isset($event->kind->name)) {
+            $kindName = $event->kind->name;
+        } elseif (
+            property_exists($event, "action") &&
+            isset($event->action->name)
+        ) {
+            $kindName = $event->action->name;
+        }
+
         $isScrollUp = $kindName === "ScrollUp";
         $isScrollDown = $kindName === "ScrollDown";
 
@@ -33,6 +38,7 @@ class MouseEventHandler
             return false;
         }
 
+        //  Editor scrolling
         if ($state->isEditorOpen()) {
             $termHeight =
                 $display && method_exists($display, "size")
@@ -55,12 +61,14 @@ class MouseEventHandler
             return true;
         }
 
+        // Dashboard and chat window scrolling.
         if ($isScrollUp) {
             $state->setAutoScroll(false);
             $state->setScrollOffset(max(0, $state->getScrollOffset() - 2));
             return true;
         }
 
+        // Scroll Down calculations matching current boundary clamping rules
         $newOffset = min($maxScroll, $state->getScrollOffset() + 2);
         $state->setScrollOffset($newOffset);
 
