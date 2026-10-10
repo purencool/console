@@ -1,99 +1,43 @@
 <?php
 namespace App\Services;
 
+use App\State\AppState;
 use Exception;
 
 class JsonService
 {
-    /** @var array The parsed multidimensional configuration matrix */
-    private array $config = [];
-
     /**
-     * Instantiates the service and automatically parses the multi-line .env matrix.
-     */
-    public function __construct()
-    {
-        $this->loadConfigFromEnv();
-    }
-
-    /**
-     * Extracts and validates the multi-line JSON environment payload.
-     */
-    private function loadConfigFromEnv(): void
-    {
-        $rawJson = $_ENV["SERVICES_CONFIG"] ?? getenv("SERVICES_CONFIG");
-
-        if (!$rawJson) {
-            $this->config = [];
-            return;
-        }
-
-        $cleanJson = trim($rawJson);
-        $parsed = json_decode($cleanJson, true);
-
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log(
-                "[JsonService Error] Failed to decode SERVICES_CONFIG: " .
-                    json_last_error_msg(),
-            );
-            $this->config = [];
-            return;
-        }
-
-        $this->config = $parsed;
-    }
-
-    /**
-     * Safely retrieves specific configuration node properties using dot-notation.
-     * Example: $service->get('ai.service_one.type');
-     */
-    public function get(string $key, mixed $default = null): mixed
-    {
-        $segments = explode(".", $key);
-        $cursor = $this->config;
-
-        foreach ($segments as $segment) {
-            if (!is_array($cursor) || !isset($cursor[$segment])) {
-                return $default;
-            }
-            $cursor = $cursor[$segment];
-        }
-
-        return $cursor;
-    }
-
-    /**
-     * Executes a call by dynamically routing it through the correct infrastructure adapter (Shell vs HTTP).
+     * Executes an infrastructure adapter routing task using pre-compiled AppState system drivers.
      *
-     * @param string $category E.g., 'ai', 'skills', or 'commands'
-     * @param string $service E.g., 'service_one', 'skills_default'
-     * @param string $action The structural identifier action keyword mapping (e.g., 'llm_chat', 'skills')
+     * @param AppState $state The global application state object container
+     * @param string $category The target system module category context (e.g., 'ai', 'skills', 'commands')
      * @param string $input Explicit text parameters or user strings bound to the context query
-     * @return array Standardised unified format array output return response
+     * @return array Standardised unified format array output containing response metrics
      */
     public function makeCall(
+        AppState $state,
         string $category,
-        string $service,
-        string $action,
         string $input = "",
     ): array {
-        $serviceConfig = $this->get("{$category}.{$service}");
+        print_r($state);
+        exit();
+        // Dynamically read the active configuration profile from the state machine's compiled registry
+        $driverProfile = method_exists($state, "getDriverProfile")
+            ? $state->getDriverProfile($category)
+            : null;
 
-        if (!$serviceConfig) {
+        if (!$driverProfile) {
             throw new Exception(
-                "Target configuration path error: '{$category}.{$service}' not found.",
+                "Target system driver profile category context error: '{$category}' is not configured or active.",
             );
         }
 
-        $endpoint = $serviceConfig["endpoint"] ?? "";
-        $method = strtoupper($serviceConfig["method"] ?? "POST");
-        $key = $serviceConfig["key"] ?? "";
+        // Instantly assign values from the pre-resolved structural object fields
 
-        // 💡 Read the type explicitly from your custom configuration property fields!
-        // Fallback to auto-detection rules if the property is absent in older environment configurations.
-        $type = strtolower(
-            $serviceConfig["type"] ?? $this->autoDetectType($endpoint),
-        );
+        $endpoint = $driverProfile["endpoint"] ?? "";
+        $method = strtoupper($driverProfile["method"] ?? "POST");
+        $type = strtolower($driverProfile["type"] ?? "shell");
+        $key = $driverProfile["key"] ?? "";
 
         $payload = [
             "action" => $action,
@@ -101,7 +45,7 @@ class JsonService
             "key" => $key,
         ];
 
-        // 🔀 Centralized Factory Routing Matrix Switch
+        // Centralized Factory Routing Matrix Switch
         switch ($type) {
             case "shell":
                 return $this->executeLocalShellCall($endpoint, $payload);
@@ -122,20 +66,6 @@ class JsonService
     }
 
     /**
-     * Backwards compatibility fallback to infer type if missing from the specific node definition.
-     */
-    private function autoDetectType(string $endpoint): string
-    {
-        if (
-            str_starts_with($endpoint, "http://") ||
-            str_starts_with($endpoint, "https://")
-        ) {
-            return "http";
-        }
-        return "shell";
-    }
-
-    /**
      * Infrastructure Adapter A: Local CLI / Shell Processors
      */
     private function executeLocalShellCall(
@@ -151,12 +81,10 @@ class JsonService
             ];
         }
 
-        // Build CLI argument variables out of incoming context parameters securely
         $escapedAction = escapeshellarg($payload["action"]);
         $escapedInput = escapeshellarg($payload["input"]);
         $escapedKey = escapeshellarg($payload["key"]);
 
-        // Format execution context lines directly mimicking target php execution shims
         $command = sprintf(
             "php %s --action=%s --input=%s --key=%s 2>&1",
             $endpoint,
@@ -169,7 +97,6 @@ class JsonService
         $returnCode = 0;
         exec($command, $output, $returnCode);
 
-        // Check if the script printed pre-formatted JSON directly
         $rawOutput = implode("\n", $output);
         $decoded = json_decode($rawOutput, true);
 
@@ -190,7 +117,7 @@ class JsonService
     }
 
     /**
-     * Infrastructure Adapter B: Remote Web Microservice APIs (Artisan Shim Web Server)
+     * Infrastructure Adapter B: Remote Web Microservice APIs (Shim Web Server)
      */
     private function executeRemoteHttpCall(
         string $endpoint,

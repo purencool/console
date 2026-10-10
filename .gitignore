@@ -6,3 +6,4 @@ package-lock.json
 error.log
 .config/*
 .config/
+i.sh

@@ -5,59 +5,76 @@
          "key":"",
          "method":"POST",
          "type": "shell",
+         "action": "llm_chat",
          "cmds":{}
       },
       "service_two": {
-         "endpoint":"php ./tests/endpoint.php",
-         "type": "http",
-         "method":"POST",
-         "cmds":{}
+        "endpoint":"php ./tests/endpoint.php",
+        "key":"",
+        "method":"POST",
+        "type": "shell",
+        "action": "llm_chat",
+        "cmds":{}
       }
     },
   "skills": {
     "skills_default": {
-         "endpoint":"php ./tests/endpoint.php",
-         "key":"",
-         "method":"",
-         "cmds":{}
+      "endpoint":"php ./tests/endpoint.php",
+      "key":"",
+      "method":"",
+      "type": "shell",
+      "action": "",
+      "cmds":{}
      },
     "skills_second": {
-        "endpoint":"",
-        "key":"",
-        "method":"",
-        "cmds":{}
+      "endpoint":"",
+      "key":"",
+      "method":"",
+      "type": "",
+      "action": "",
+      "cmds":{}
       }
     },
   "commands": {
     "agents": {
-         "endpoint":"",
-         "key":"",
-         "method":"",
-         "cmds":{}
+      "endpoint":"",
+      "key":"",
+      "method":"",
+      "type": "",
+      "action": "",
+      "cmds":{}
       },
       "mcp": {
-         "endpoint":"",
-         "key":"",
-         "method":"",
-         "cmds":{}
+        "endpoint":"",
+        "key":"",
+        "method":"",
+        "type": "",
+        "action": "",
+        "cmds":{}
       },
       "client": {
-         "endpoint":"",
-         "key":"",
-         "method":"",
-         "cmds":{}
+        "endpoint":"",
+        "key":"",
+        "method":"",
+        "type": "",
+        "action": "",
+        "cmds":{}
       },
       "website": {
-         "endpoint":"",
-         "key":"",
-         "method":"",
-         "cmds":{}
+        "endpoint":"",
+        "key":"",
+        "method":"",
+        "type": "",
+        "action": "",
+        "cmds":{}
       },
       "communication": {
-         "endpoint":"",
-         "key":"",
-         "method":"",
-         "cmds":{}
+        "endpoint":"",
+        "key":"",
+        "method":"",
+        "type": "",
+        "action": "",
+        "cmds":{}
       }
   }
 }

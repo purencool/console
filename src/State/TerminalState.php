@@ -8,8 +8,6 @@ class TerminalState
     private array $terminalBuffer = [];
     private int $terminalScrollOffset = 0;
     private bool $terminalDrawerOpen = false;
-
-    // 💡 Declared encapsulated local command history stack properties
     private array $termHistoryStack = [];
     private int $termHistoryIdx = -1;
 
@@ -17,6 +15,7 @@ class TerminalState
     {
         return $this->activeTerminalInput;
     }
+
     public function setActiveTerminalInput(string $input): void
     {
         $this->activeTerminalInput = $input;
@@ -27,6 +26,7 @@ class TerminalState
     {
         return $this->terminalCursor;
     }
+
     public function setTerminalCursor(int $pos): void
     {
         $this->terminalCursor = max(
@@ -39,6 +39,7 @@ class TerminalState
     {
         $left = mb_substr($this->activeTerminalInput, 0, $this->terminalCursor);
         $right = mb_substr($this->activeTerminalInput, $this->terminalCursor);
+
         $this->activeTerminalInput = $left . $char . $right;
         $this->terminalCursor += mb_strlen($char);
     }
@@ -55,6 +56,7 @@ class TerminalState
                 $this->activeTerminalInput,
                 $this->terminalCursor,
             );
+
             $this->activeTerminalInput = $left . $right;
             $this->terminalCursor--;
         }
@@ -64,6 +66,7 @@ class TerminalState
     {
         return $this->terminalBuffer;
     }
+
     public function addTerminalOutput(string $line): void
     {
         $this->terminalBuffer[] = $line;
@@ -73,6 +76,7 @@ class TerminalState
     {
         return $this->terminalScrollOffset;
     }
+
     public function setTerminalScrollOffset(int $offset): void
     {
         $this->terminalScrollOffset = max(0, $offset);
@@ -82,24 +86,25 @@ class TerminalState
     {
         return $this->terminalDrawerOpen;
     }
+
     public function toggleTerminalDrawer(): void
     {
         $this->terminalDrawerOpen = !$this->terminalDrawerOpen;
     }
 
     /**
-     * 💡 Records submitted terminal command text to the internal historical stack memory buffer.
+     * Records submitted terminal command text to the internal historical stack.
      */
     public function recordSubmission(string $input): void
     {
         if (trim($input) !== "") {
             array_unshift($this->termHistoryStack, $input);
-            $this->termHistoryIdx = -1; // Reset indices configuration tracking offset pointer marker
+            $this->termHistoryIdx = -1;
         }
     }
 
     /**
-     * 💡 Cycles active terminal input command display values backward/forward inside text fields.
+     * Cycles active terminal input command values backward/forward.
      */
     public function cycleHistory(bool $up): void
     {
@@ -110,18 +115,24 @@ class TerminalState
         if ($up) {
             if ($this->termHistoryIdx < count($this->termHistoryStack) - 1) {
                 $this->termHistoryIdx++;
-                $this->setActiveTerminalInput($this->termHistoryStack[$this->termHistoryIdx]);
-                $this->setTerminalCursor(mb_strlen($this->getActiveTerminalInput()));
+                $this->setActiveTerminalInput(
+                    $this->termHistoryStack[$this->termHistoryIdx],
+                );
+                $this->setTerminalCursor(mb_strlen($this->activeTerminalInput));
             }
-        } else {
-            if ($this->termHistoryIdx > 0) {
-                $this->termHistoryIdx--;
-                $this->setActiveTerminalInput($this->termHistoryStack[$this->termHistoryIdx]);
-            } else {
-                $this->termHistoryIdx = -1;
-                $this->setActiveTerminalInput("");
-            }
-            $this->setTerminalCursor(mb_strlen($this->getActiveTerminalInput()));
+            return;
         }
+
+        if ($this->termHistoryIdx > 0) {
+            $this->termHistoryIdx--;
+            $this->setActiveTerminalInput(
+                $this->termHistoryStack[$this->termHistoryIdx],
+            );
+        } else {
+            $this->termHistoryIdx = -1;
+            $this->setActiveTerminalInput("");
+        }
+
+        $this->setTerminalCursor(mb_strlen($this->activeTerminalInput));
     }
 }

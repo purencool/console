@@ -3,23 +3,34 @@ namespace App\UI\Component\Keybindings;
 
 use App\State\AppState;
 use PhpTui\Term\Event\CodedKeyEvent;
-use PhpTui\Term\KeyCode;
 use PhpTui\Term\KeyModifiers;
 
 class GlobalHotkeyHandler
 {
-    public function handle(CodedKeyEvent $event, AppState $state): bool
+    /**
+     * Intercepts system-wide control combinations and handles workspace focus switching shortcuts.
+     *
+     * @param array<string, object> $services Centralised system dependency registry
+     */
+    public function handle(CodedKeyEvent $event, array $services): bool
     {
-        // Intercept Control modifier actions for function keys
-        if (
+        /** @var AppState $state */
+        $state = $services["state"];
+
+        // Extract the code name string safely to guarantee compatibility across backend configurations
+        $codeName =
+            is_object($event->code) && property_exists($event->code, "name")
+                ? $event->code->name
+                : (string) $event->code;
+
+        $isCtrl =
             ($event->modifiers & KeyModifiers::CONTROL) ===
-            KeyModifiers::CONTROL
-        ) {
-            // Tab is a valid CodedKeyEvent code path
-            if ($event->code === KeyCode::Tab) {
-                $state->toggleInputFocus();
-                return true;
-            }
+            KeyModifiers::CONTROL;
+
+        // Toggle focus alignment boundaries between panel windows when Ctrl+Tab is captured
+        if ($isCtrl && $codeName === "Tab") {
+            $state->toggleInputFocus();
+            return true;
         }
 
         return false;

@@ -1,9 +1,9 @@
 <?php
-
 namespace App\UI\Component\Renders;
 
 use App\State\AppState;
 use App\Support\ReflectionHelper;
+use App\Services\TerminalLayoutService;
 use PhpTui\Tui\Extension\Core\Widget\GridWidget;
 use PhpTui\Tui\Extension\Core\Widget\ParagraphWidget;
 use PhpTui\Tui\Text\Line;
@@ -11,39 +11,57 @@ use PhpTui\Tui\Text\Text;
 
 class EditorRenderer
 {
+    private string $spanClass;
+    private string $styleClass;
+    private string $colorClass;
+
+    public function __construct()
+    {
+        // Cache class resolutions once to prevent reflection overhead during hot draw ticks
+        $this->spanClass  = class_exists('\PhpTui\Tui\Text\Span') ? '\PhpTui\Tui\Text\Span' : '\PhpTui\Tui\Model\Widget\Span';
+        $this->styleClass = class_exists('\PhpTui\Tui\Style\Style') ? '\PhpTui\Tui\Style\Style' : '\PhpTui\Tui\Model\Style';
+        $this->colorClass = class_exists('\PhpTui\Tui\Color\AnsiColor') ? '\PhpTui\Tui\Color\AnsiColor' : '\PhpTui\Tui\Model\Color\AnsiColor';
+    }
+
     /**
-     * Renders the interactive fullscreen text editor pane.
+     * Renders the interactive fullscreen text editor pane layout.
+     *
+     * @param array<string, object> $services Centralised system dependency registry
      */
     public function render(
-        $display,
-        AppState $state,
-        int $termHeight,
-        bool $showCursor,
-        int $vPad,
-        string $hPadStr,
+        object $display,
+        array $services,
+        bool $showCursor
     ): void {
+        /** @var AppState $state */
+        $state = $services["state"];
+
+        /** @var TerminalLayoutService $layoutService */
+        $layoutService = $services["layout"];
+
+        // Dynamically read hardware dimension parameters straight out of your layout service!
+        $dims       = $layoutService->getDimensions($display);
+        $termHeight = $dims['height'];
+
+        // Pull dynamic style tokens and metrics from your centralised layout service
+        $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
+        $vPad    = $metrics['vPad'];
+        $hPadStr = $metrics['hPadStr'];
+
         $constraintClass = ReflectionHelper::getConstraintClass();
 
-        $spanClass = class_exists("\PhpTui\Tui\Text\Span")
-            ? "\PhpTui\Tui\Text\Span"
-            : "\PhpTui\Tui\Model\Widget\Span";
-        $styleClass = class_exists("\PhpTui\Tui\Style\Style")
-            ? "\PhpTui\Tui\Style\Style"
-            : "\PhpTui\Tui\Model\Style";
-        $colorClass = class_exists("\PhpTui\Tui\Color\AnsiColor")
-            ? "\PhpTui\Tui\Color\AnsiColor"
-            : "\PhpTui\Tui\Model\Color\AnsiColor";
-
-        $bgStyle = $styleClass::default()->bg($colorClass::DarkGray);
-        $lineNumStyle = $styleClass::default()->fg($colorClass::DarkGray);
+        // Core Layout Styles
+        $bgStyle      = $this->styleClass::default()->bg($this->colorClass::DarkGray);
+        $lineNumStyle = $this->styleClass::default()->fg($this->colorClass::DarkGray);
 
         $lines = $state->getEditorLines();
-        $row = $state->getEditorRow();
-        $col = $state->getEditorCol();
+        $row   = $state->getEditorRow();
+        $col   = $state->getEditorCol();
 
-        // Compute viewport layout bounds
-        $visibleLines = max(1, $termHeight - 2 - $vPad * 2);
-        $scrollY = $state->getEditorScrollY();
+        // 2. Compute Vertical Viewport Scroll Adjustments
+        $visibleLines = max(1, $termHeight - 2 - ($vPad * 2));
+        $scrollY      = $state->getEditorScrollY();
+
         if ($row < $scrollY) {
             $scrollY = $row;
         } elseif ($row >= $scrollY + $visibleLines) {
@@ -51,71 +69,64 @@ class EditorRenderer
         }
         $state->setEditorScrollY($scrollY);
 
+        // Slice current window region viewport out of text file layout buffers
         $renderLines = array_slice($lines, $scrollY, $visibleLines);
-        $tuiLines = [];
+        $tuiLines    = [];
 
         for ($i = 0; $i < $vPad; $i++) {
             $tuiLines[] = Line::fromString("");
         }
 
-        // Calculate dynamic line number column width boundaries
-        $totalLines = count($lines);
-        $lineNumWidth = max(3, strlen((string) $totalLines));
+        // Calculate dynamic line number gutter width alignment boundaries
+        $totalLines   = count($lines);
+        $lineNumWidth = max(3, strlen((string)$totalLines));
 
-        foreach ($renderLines as $idx => $l) {
+        // 3. Build Render Lines and Process Cursor Highlights
+        foreach ($renderLines as $idx => $lineContent) {
             $actualLineNum = $scrollY + $idx + 1;
-            $lineNumStr =
-                str_pad(
-                    (string) $actualLineNum,
-                    $lineNumWidth,
-                    " ",
-                    STR_PAD_LEFT,
-                ) . " │ ";
+            $lineNumStr    = str_pad((string)$actualLineNum, $lineNumWidth, " ", STR_PAD_LEFT) . " │ ";
 
-            if ($idx === $row - $scrollY) {
-                $cCol = $col;
-                $char = $cCol >= mb_strlen($l) ? " " : mb_substr($l, $cCol, 1);
-                $left = mb_substr($l, 0, $cCol);
-                $right = mb_substr($l, $cCol + 1);
+            $spans = [
+                $this->spanClass::fromString($hPadStr),
+                $this->spanClass::fromString($lineNumStr)->style($lineNumStyle),
+            ];
 
-                $spans = [
-                    $spanClass::fromString($hPadStr),
-                    $spanClass::fromString($lineNumStr)->style($lineNumStyle),
-                ];
+            // If the row matches the cursor row position, paint the active split text spans
+            if ($idx === ($row - $scrollY)) {
+                $char  = ($col >= mb_strlen($lineContent)) ? " " : mb_substr($lineContent, $col, 1);
+                $left  = mb_substr($lineContent, 0, $col);
+                $right = mb_substr($lineContent, $col + 1);
 
                 if ($left !== "") {
-                    $spans[] = $spanClass::fromString($left);
+                    $spans[] = $this->spanClass::fromString($left);
                 }
 
                 $spans[] = $showCursor
-                    ? $spanClass::fromString($char)->style($bgStyle)
-                    : $spanClass::fromString($char);
+                    ? $this->spanClass::fromString($char)->style($bgStyle)
+                    : $this->spanClass::fromString($char);
 
                 if ($right !== "") {
-                    $spans[] = $spanClass::fromString($right);
+                    $spans[] = $this->spanClass::fromString($right);
                 }
-                $tuiLines[] = Line::fromSpans(...$spans);
             } else {
-                $spans = [
-                    $spanClass::fromString($hPadStr),
-                    $spanClass::fromString($lineNumStr)->style($lineNumStyle),
-                    $spanClass::fromString($l),
-                ];
-                $tuiLines[] = Line::fromSpans(...$spans);
+                $spans[] = $this->spanClass::fromString($lineContent);
             }
+
+            $tuiLines[] = Line::fromSpans(...$spans);
         }
 
         for ($i = 0; $i < $vPad; $i++) {
             $tuiLines[] = Line::fromString("");
         }
 
+        // 4. Compile Title Header Metadata and Draw Workspace
         $statusText = $state->getEditorStatus() ?: "Ready";
         $title = sprintf(
             " Editor: %s [Row: %d, Col: %d] [Ctrl+S: Save | Esc: Close] - %s ",
             $state->getEditorFilePath(),
             $row + 1,
             $col + 1,
-            $statusText,
+            $statusText
         );
 
         $display->draw(
@@ -123,11 +134,9 @@ class EditorRenderer
                 ->constraints($constraintClass::percentage(100))
                 ->widgets(
                     ReflectionHelper::createBlock($title)->widget(
-                        ParagraphWidget::fromText(
-                            Text::fromLines(...$tuiLines),
-                        ),
-                    ),
-                ),
+                        ParagraphWidget::fromText(Text::fromLines(...$tuiLines))
+                    )
+                )
         );
     }
 }

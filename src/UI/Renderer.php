@@ -2,6 +2,7 @@
 namespace App\UI;
 
 use App\State\AppState;
+use App\Services\TerminalLayoutService;
 use App\Support\ReflectionHelper;
 use App\UI\Component\Renders\EditorRenderer;
 use App\UI\Component\Renders\ChatRenderer;
@@ -13,91 +14,76 @@ use PhpTui\Tui\Text\Text;
 
 class Renderer
 {
-    public static function render(
-        $display,
-        AppState $state,
-        int $maxScroll,
-    ): void {
-        $viewport = method_exists($display, "viewportArea")
-            ? $display->viewportArea()
-            : null;
-        $termWidth = $viewport ? $viewport->width : 100;
-        $termHeight = $viewport ? $viewport->height : 30;
+    private string $spanClass;
 
-        $showCursor = (int) (microtime(true) * 2) % 2 === 0;
-
-        // Shared padding configurations
-        $hPad = 1;
-        $vPad = 1;
-        $hPadStr = str_repeat(" ", $hPad);
-
-        $spanClass = class_exists("\PhpTui\Tui\Text\Span")
+    public function __construct()
+    {
+        // Cache class resolution once to prevent reflection overhead during hot draw ticks
+        $this->spanClass = class_exists("\PhpTui\Tui\Text\Span")
             ? "\PhpTui\Tui\Text\Span"
             : "\PhpTui\Tui\Model\Widget\Span";
-        $styleClass = class_exists("\PhpTui\Tui\Style\Style")
-            ? "\PhpTui\Tui\Style\Style"
-            : "\PhpTui\Tui\Model\Style";
-        $colorClass = class_exists("\PhpTui\Tui\Color\AnsiColor")
-            ? "\PhpTui\Tui\Color\AnsiColor"
-            : "\PhpTui\Tui\Model\Color\AnsiColor";
+    }
 
-        $bgStyle = $styleClass::default()->bg($colorClass::DarkGray);
+    /**
+     * Master UI Drawing Gateway orchestrating sub-pane composition.
+     *
+     * @param array<string, object> $services Centralised system dependency registry
+     */
+    public function render(object $display, array $services): void
+    {
+        /** @var AppState $state */
+        $state = $services["state"];
+        /** @var TerminalLayoutService $layoutService */
+        $layoutService = $services["layout"];
 
-        $prefixes = [
-            "[System]" => $styleClass::default()->fg($colorClass::Yellow),
-            "[Agent]" => $styleClass::default()->fg($colorClass::Green),
-            "[Error]" => $styleClass::default()->fg($colorClass::Red),
-            "You:" => $styleClass::default()->fg($colorClass::Cyan),
-        ];
+        // Ingest View Dimensions and Layout Metrics from Service
+        $dims = $layoutService->getDimensions($display);
+        $showCursor = $layoutService->shouldShowCursor();
+        $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
+
+        $termWidth = $dims["width"];
+        $termHeight = $dims["height"];
+        $vPad = $metrics["vPad"];
+        $hPad = $metrics["hPad"];
+        $hPadStr = $metrics["hPadStr"];
 
         if ($state->isEditorOpen()) {
-            new EditorRenderer()->render(
-                $display,
-                $state,
-                $termHeight,
-                $showCursor,
-                $vPad,
-                $hPadStr,
-            );
+            new EditorRenderer()->render($display, $services, $showCursor);
             return;
         }
 
-        $paneWidthPercent = $state->isSidebarVisible() ? 70 : 100;
-        $leftPaneWidth = (int) ($termWidth * ($paneWidthPercent / 100));
-        $innerWidth = max(1, $leftPaneWidth - 2 - $hPad * 2);
-
-        // Render Input Box
-        $inputData = new InputBoxRenderer()->render(
-            $state,
-            $innerWidth,
-            $vPad,
-            $hPadStr,
-            $spanClass,
-            $bgStyle,
+        // Delegate Grid Geometry Calculations
+        $geometry = $layoutService->calculateGridGeometry(
+            $termWidth,
+            $state->isSidebarVisible(),
+            $hPad,
         );
-        $inputTuiLines = $inputData["lines"];
+        $innerWidth = $geometry["innerWidth"];
+
+        // Render Input Panel Area
+        $inputData = new InputBoxRenderer()->render(
+            $services,
+            $innerWidth,
+            $this->spanClass,
+            $metrics["bgStyle"],
+        );
         $inputBoxHeight = $inputData["height"];
 
-        // Render Chat Log
-        $terminalDrawerHeight = $state->isTerminalDrawerOpen()
-            ? (int) ($termHeight * 0.4)
-            : 0;
-        $visibleChatHeight = max(
-            5,
-            $termHeight - $inputBoxHeight - $terminalDrawerHeight - 2,
-        );
-        $sliceChatHeight = max(1, $visibleChatHeight - $vPad * 2);
-
-        $chatWidget = new ChatRenderer()->render(
-            $display,
-            $state,
-            $innerWidth,
-            $sliceChatHeight,
+        $heights = $layoutService->calculatePaneHeights(
+            $termHeight,
+            $inputBoxHeight,
+            $state->isTerminalDrawerOpen(),
             $vPad,
-            $hPad,
-            $hPadStr,
-            $spanClass,
-            $prefixes,
+        );
+        $terminalDrawerHeight = $heights["drawerHeight"];
+        $sliceChatHeight = $heights["sliceChatHeight"];
+
+        // 4. Render Layout Sub-Components
+        $chatWidget = new ChatRenderer()->render(
+            $services,
+            $sliceChatHeight,
+            $this->spanClass,
+            $metrics["prefixes"],
         );
 
         $chatTitle = $state->getScannedPath()
@@ -105,7 +91,6 @@ class Renderer
                 basename($state->getScannedPath()) .
                 "] "
             : " Chat Log [Ctrl+T: Terminal | Ctrl+S: Sidebar] ";
-
         $chatBoxTitle = $state->isProcessing()
             ? " Input [Processing Request...] "
             : " Input (Type / for help, Enter to submit) ";
@@ -113,19 +98,17 @@ class Renderer
         $leftWidgets = [
             ReflectionHelper::createBlock($chatTitle)->widget($chatWidget),
             ReflectionHelper::createBlock($chatBoxTitle)->widget(
-                ParagraphWidget::fromText(Text::fromLines(...$inputTuiLines)),
+                ParagraphWidget::fromText(
+                    Text::fromLines(...$inputData["lines"]),
+                ),
             ),
         ];
 
-        // Render Terminal Drawer if active
         if ($state->isTerminalDrawerOpen()) {
             $termLines = new TerminalRenderer()->render(
-                $state,
-                $terminalDrawerHeight,
-                $vPad,
-                $hPadStr,
-                $spanClass,
-                $bgStyle,
+                $services,
+                $this->spanClass,
+                $metrics["bgStyle"],
                 $showCursor,
             );
             $leftWidgets[] = ReflectionHelper::createBlock(
@@ -135,18 +118,14 @@ class Renderer
             );
         }
 
-        // Delegate compilation
+        // Delegate Final UI Frame Compilation
         new LayoutRenderer()->render(
             $display,
-            $state,
+            $services,
             $leftWidgets,
-            $termWidth,
             $termHeight,
             $inputBoxHeight,
             $terminalDrawerHeight,
-            $vPad,
-            $hPadStr,
-            $spanClass,
         );
     }
 }

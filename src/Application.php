@@ -1,8 +1,6 @@
 <?php
 namespace App;
 
-use App\State\AppState;
-use App\Services\LogService;
 use App\Support\TerminalSetup;
 use App\UI\Renderer;
 use App\UI\EventHandler;
@@ -14,48 +12,45 @@ class Application
     /** @var ?Terminal */
     private ?Terminal $terminal = null;
 
-    /** @var AppState */
-    private AppState $state;
+    /** @var array<string, object> */
+    private array $services;
 
-    /** @var LogService */
-    private LogService $logService;
-
-    public function __construct(LogService $logService)
+    /**
+     * Ingests the centralized system service matrix dependency registries.
+     */
+    public function __construct(array $services)
     {
-        $this->state = new AppState();
-        $this->logService = $logService;
+        $this->services = $services;
     }
 
+    /**
+     * Spawns the main terminal application runtime cycle loop.
+     */
     public function run(): void
     {
+        /** @var \App\State\AppState $state */
+        $state = $this->services["state"];
+        /** @var \App\Services\LogService $logger */
+        $logger = $this->services["log"];
+
         echo "\x1b[?25l"; // Hide native hardware cursor
+
         $this->terminal = TerminalSetup::initialize();
         $display = DisplayBuilder::default()->build();
+        $uiRenderer = new Renderer();
 
-        while ($this->state->isRunning()) {
-            Renderer::render(
-                $display,
-                $this->state,
-                $this->state->getMaxScroll(),
-            );
-
-            $maxScroll = $this->state->getMaxScroll();
+        while ($state->isRunning()) {
+            // Render screen grid coordinates using synchronized maxScroll margins
+            $maxScroll = $state->getMaxScroll();
+            $uiRenderer->render($display, $this->services);
 
             while (null !== ($event = $this->terminal->events()->next())) {
-                EventHandler::handle(
-                    $event,
-                    $this->terminal,
-                    $this->state,
-                    $maxScroll,
-                    fn($msg) => $this->logService->log($msg),
-                    fn() => $this->executeArtisan(),
-                    $display,
-                );
-
-                if (!$this->state->isRunning()) {
+                EventHandler::handle($event, $this->services, $maxScroll);
+                if (!$state->isRunning()) {
                     break 2;
                 }
             }
+
             usleep(10000);
         }
 
@@ -64,12 +59,16 @@ class Application
     }
 
     /**
-     * Executes the appropriate artisan command based on app state.
+     * Executes the configured background command strings matching selected option layers.
      */
     private function executeArtisan(): void
     {
-        $options = $this->state->getOptions();
+        /** @var \App\State\AppState $state */
+        $state = $this->services["state"];
+        /** @var \App\Services\LogService $logger */
+        $logger = $this->services["log"];
 
+        $options = $state->getOptions();
         $command = $_ENV["CMD_DEFAULT"] ?? "";
 
         if (!empty($options["cache"]["checked"])) {
@@ -81,24 +80,24 @@ class Application
         }
 
         if (empty($command)) {
-            $this->logService->log(
+            $logger->log(
                 "Error: Target command environment variable is empty or missing.",
             );
             return;
         }
 
-        $this->logService->log("Executing: $command");
-        $this->state->addChatMessage("[System] Executing: $command");
+        $logger->log("Executing: $command");
+        $state->addChatMessage("[System] Executing: $command");
 
         $output = shell_exec($command . " 2>&1");
         if ($output === null || trim($output) === "") {
-            $this->state->addChatMessage(" > (No output returned)");
+            $state->addChatMessage(" > (No output returned)");
         } else {
             foreach (explode("\n", rtrim($output)) as $line) {
-                $this->state->addChatMessage($line);
+                $state->addChatMessage($line);
             }
         }
 
-        $this->state->setAutoScroll(true);
+        $state->setAutoScroll(true);
     }
 }

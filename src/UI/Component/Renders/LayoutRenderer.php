@@ -3,6 +3,7 @@ namespace App\UI\Component\Renders;
 
 use App\State\AppState;
 use App\Support\ReflectionHelper;
+use App\Services\TerminalLayoutService;
 use PhpTui\Tui\Extension\Core\Widget\GridWidget;
 use PhpTui\Tui\Extension\Core\Widget\ParagraphWidget;
 use PhpTui\Tui\Text\Line;
@@ -11,25 +12,38 @@ use PhpTui\Tui\Text\Text;
 class LayoutRenderer
 {
     /**
-     * Handles compiling Left Widgets and managing Sidebar grid constraints.
+     * Compiles grid coordinates and balances layout splits between panels.
+     *
+     * @param array<string, object> $services Centralised system dependency registry
+     * @param array<object> $leftWidgets Aggregated panel widget matrix stack structures
      */
     public function render(
-        $display,
-        AppState $state,
+        object $display,
+        array $services,
         array $leftWidgets,
-        int $termWidth,
         int $termHeight,
         int $inputBoxHeight,
         int $terminalDrawerHeight,
-        int $vPad,
-        string $hPadStr,
-        string $spanClass,
     ): void {
-        $dirHorizontal = ReflectionHelper::getDirectionClasses()[0];
-        $dirVertical = ReflectionHelper::getDirectionClasses()[1];
+        /** @var AppState $state */
+        $state = $services["state"];
+
+        /** @var TerminalLayoutService $layoutService */
+        $layoutService = $services["layout"];
+
+        // Dynamically read padding and design tokens from the layout service
+        $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
+        $vPad = $metrics["vPad"] ?? 1;
+        $hPadStr = $metrics["hPadStr"] ?? " ";
+
+        // Resolve Dynamic Reflection Framework Adapters
+        [
+            $dirHorizontal,
+            $dirVertical,
+        ] = ReflectionHelper::getDirectionClasses();
         $constraintClass = ReflectionHelper::getConstraintClass();
 
-        // Calculate heights dynamically for the left layout stack
+        // Compute Left Side Interface Geometry Layout Stack
         $remainingHeight = max(
             0,
             $termHeight - $inputBoxHeight - $terminalDrawerHeight,
@@ -51,19 +65,20 @@ class LayoutRenderer
             ->constraints(...$leftConstraints)
             ->widgets(...$leftWidgets);
 
-        // Sidebar Grid Compilation
+        // Compile Collapsible Sidebar Viewport Grid Section
         if ($state->isSidebarVisible()) {
             $sidebarLines = [];
             for ($i = 0; $i < $vPad; $i++) {
                 $sidebarLines[] = Line::fromString("");
             }
 
-            // Dummy content representing sidebar data tracking
             $sidebarLines[] = Line::fromString($hPadStr . "📁 Active Files");
-            foreach ($state->getChatLog() as $log) {
-                if (str_contains($log, "[Agent]")) {
+
+            // Extract agent updates cleanly to generate quick contextual indicators
+            foreach ($state->getChatLog() as $logLine) {
+                if (str_contains($logLine, "[Agent]")) {
                     $sidebarLines[] = Line::fromString(
-                        $hPadStr . "  • " . substr(basename($log), 0, 15),
+                        $hPadStr . "  • " . substr(basename($logLine), 0, 15),
                     );
                 }
             }
@@ -85,6 +100,7 @@ class LayoutRenderer
             $mainGrid = $leftGrid;
         }
 
+        // Project full panel grid matrix straight to screen buffer channels
         $display->draw($mainGrid);
     }
 }

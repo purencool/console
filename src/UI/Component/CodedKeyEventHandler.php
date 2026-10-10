@@ -1,108 +1,46 @@
 <?php
 namespace App\UI\Component;
 
-use App\State\AppState;
-use App\Services\LlmService;
-use App\Services\KeyBindingService;
 use App\UI\Component\Keybindings\GlobalHotkeyHandler;
 use App\UI\Component\Keybindings\NavigationHandler;
 use App\UI\Component\Keybindings\TerminalSubmissionHandler;
 use App\UI\Component\Keybindings\ChatSubmissionHandler;
 use PhpTui\Term\Event\CodedKeyEvent;
-use PhpTui\Term\KeyCode;
 
 class CodedKeyEventHandler
 {
     /**
-     * Delegates event executions down into single-responsibility sub-handlers.
+     * Delegates specific coded navigation keys down into specialized single-responsibility handlers.
+     *
+     * @param array<string, object> $services Centralised system dependency registry
      */
     public function handle(
         CodedKeyEvent $event,
-        AppState $state,
-        LlmService $llmService,
+        array $services,
         int $maxScroll,
-        callable $logger,
     ): bool {
-        
-        // 💡 1. Always evaluate global key actions first
-        $keyBinder = new KeyBindingService();
-        $action = $keyBinder->matchEvent($event);
+        // Normalize Enum properties to safely read string signatures ('Up', 'Down', 'Enter')
+        $codeName =
+            is_object($event->code) && property_exists($event->code, "name")
+                ? $event->code->name
+                : (string) $event->code;
 
-        $focus = strtolower($state->getInputFocus());
-        $isTerminalOpen = $state->isTerminalDrawerOpen();
-
-        // ==========================================
-        // 🎯 UP ARROW: RECALL PREVIOUS COMMAND
-        // ==========================================
-        if ($action === KeyBindingService::ACTION_HISTORY_UP) {
-            $logger("[HISTORY] Up arrow captured. Focus: '{$focus}', Drawer Open: " . ($isTerminalOpen ? 'YES' : 'NO'));
-
-            if ($focus === 'terminal' || ($isTerminalOpen && $focus !== 'chat')) {
-                $state->cycleTermHistory(true);
-                return true; // 💥 CRITICAL: Return true instantly to prevent sub-handlers from running!
-            }
-            
-            if ($focus === 'chat') {
-                $state->cycleChatHistory(true);
-                return true; // 💥 CRITICAL: Return true instantly!
-            }
-
-            // Fallback to background screen scrolling if no inputs are active
-            $state->setAutoScroll(false);
-            $currentOffset = $state->getScrollOffset();
-            if ($currentOffset > 0) {
-                $state->setScrollOffset($currentOffset - 1);
-            }
+        // Delegate core panel focus hotkeys and layout modifications
+        if (new GlobalHotkeyHandler()->handle($event, $services)) {
             return true;
         }
 
-        // ==========================================
-        // 🎯 DOWN ARROW: RECALL NEXT COMMAND
-        // ==========================================
-        if ($action === KeyBindingService::ACTION_HISTORY_DOWN) {
-            $logger("[HISTORY] Down arrow captured. Focus: '{$focus}', Drawer Open: " . ($isTerminalOpen ? 'YES' : 'NO'));
-
-            if ($focus === 'terminal' || ($isTerminalOpen && $focus !== 'chat')) {
-                $state->cycleTermHistory(false);
-                return true; 
-            }
-            
-            if ($focus === 'chat') {
-                $state->cycleChatHistory(false);
-                return true; 
-            }
-
-            $currentOffset = $state->getScrollOffset();
-            if ($currentOffset < $maxScroll) {
-                $state->setScrollOffset($currentOffset + 1);
-            }
-            if ($state->getScrollOffset() >= $maxScroll) {
-                $state->setAutoScroll(true);
-            }
-            return true;
-        }
-        
-        // ==========================================
-        // 💡 2. Only delegate to sub-handlers if no history buttons matched
-        // ==========================================
-        $globalHandler = new GlobalHotkeyHandler();
-        if ($globalHandler->handle($event, $state)) {
+        // Delegate viewport structural navigation overrides (Arrows, PageUp, Backspaces)
+        if (new NavigationHandler()->handle($event, $services, $maxScroll)) {
             return true;
         }
 
-        $navigationHandler = new NavigationHandler();
-        if ($navigationHandler->handle($event, $state, $maxScroll)) {
-            return true;
-        }
-
-        if ($event->code === KeyCode::Enter) {
-            $terminalHandler = new TerminalSubmissionHandler();
-            if ($terminalHandler->handle($state)) {
+        // Delegate form action submission routes
+        if ($codeName === "Enter") {
+            if (new TerminalSubmissionHandler()->handle($services)) {
                 return true;
             }
-
-            $chatHandler = new ChatSubmissionHandler();
-            if ($chatHandler->handle($state, $llmService, $logger)) {
+            if (new ChatSubmissionHandler()->handle($services)) {
                 return true;
             }
         }

@@ -14,18 +14,22 @@ class TerminalSetup
      */
     public static function initialize(): Terminal
     {
-        fwrite(STDOUT, "\x1b[?1049h\x1b[2J\x1b[H");
+        // Send all custom terminal modifications (Alternate screen, clear, and mouse tracking protocols)
+        // using the exact same stream writer (STDOUT) at the same time to prevent buffering latency.
+        // \x1b[?1003h = Track all mouse moves/scrolls | \x1b[?1006h = SGR Extended coordinate format
+        fwrite(STDOUT, "\x1b[?1049h\x1b[2J\x1b[H\x1b[?1003h\x1b[?1006h");
+
         $terminal = Terminal::new();
         $terminal->enableRawMode();
-        $terminal->execute(Actions::enableMouseCapture());
 
         register_shutdown_function(function () use ($terminal) {
             try {
-                $terminal->execute(Actions::disableMouseCapture());
                 $terminal->disableRawMode();
             } catch (\Throwable $e) {
             }
-            fwrite(STDOUT, "\x1b[?1049l");
+            // Cleanly undo EVERY manual modification sent during startup
+            // \x1b[?1003l = Turn off scrolling mouse track | \x1b[?1006l = Turn off SGR extended format
+            fwrite(STDOUT, "\x1b[?1003l\x1b[?1006l\x1b[?1049l");
         });
 
         return $terminal;

@@ -1,6 +1,8 @@
 <?php
 namespace App\State;
 
+use App\Services\ConfigManager;
+
 class SystemState
 {
     private bool $running = true;
@@ -9,23 +11,25 @@ class SystemState
     private ?string $scannedPath = null;
     private bool $isProcessing = false;
     private float $processingStartTime = 0.0;
-
     private array $inputHistory = [];
     private int $historyIndex = -1;
     private string $tempInput = "";
+    private array $systemDrivers = [];
+    private array $options = [];
 
-    private string $activeAiService = "";
-
-    private array $options = [
-        "cache" => ["label" => "Clear Cache", "checked" => false],
-        "migrate" => ["label" => "Run Migrations", "checked" => true],
-        "dryrun" => ["label" => "Dry Run Mode", "checked" => false],
-    ];
+    /**
+     * Initializes the system profiles and ingests registries from the centralized config manager.
+     */
+    public function __construct(ConfigManager $config)
+    {
+        $this->systemDrivers = $config->getSystem();
+    }
 
     public function isRunning(): bool
     {
         return $this->running;
     }
+
     public function stop(): void
     {
         $this->running = false;
@@ -35,15 +39,22 @@ class SystemState
     {
         return $this->inputFocus;
     }
+
     public function setInputFocus(string $focus): void
     {
         $this->inputFocus = $focus;
+    }
+
+    public function toggleInputFocus(): void
+    {
+        $this->inputFocus = $this->inputFocus === "chat" ? "terminal" : "chat";
     }
 
     public function isSidebarVisible(): bool
     {
         return $this->sidebarVisible;
     }
+
     public function toggleSidebar(): void
     {
         $this->sidebarVisible = !$this->sidebarVisible;
@@ -53,6 +64,7 @@ class SystemState
     {
         return $this->scannedPath;
     }
+
     public function setScannedPath(?string $path): void
     {
         $this->scannedPath = $path;
@@ -62,6 +74,7 @@ class SystemState
     {
         return $this->isProcessing;
     }
+
     public function setProcessing(bool $processing): void
     {
         $this->isProcessing = $processing;
@@ -79,6 +92,7 @@ class SystemState
     {
         return $this->options;
     }
+
     public function toggleOption(string $key): void
     {
         if (isset($this->options[$key])) {
@@ -86,13 +100,9 @@ class SystemState
         }
     }
 
-    public function getActiveAiService(): string
+    public function getSystemDrivers(): array
     {
-        return $this->activeAiService;
-    }
-    public function setActiveAiService(string $serviceId): void
-    {
-        $this->activeAiService = $serviceId;
+        return $this->systemDrivers;
     }
 
     public function addHistory(string $input): void
@@ -101,6 +111,9 @@ class SystemState
         $this->historyIndex = -1;
     }
 
+    /**
+     * Cycles chat prompt input history retrieval collections backward (Up).
+     */
     public function historyUp(
         callable $setInputTextCallback,
         callable $getInputTextCallback,
@@ -121,6 +134,9 @@ class SystemState
         }
     }
 
+    /**
+     * Cycles chat prompt input history retrieval collections forward (Down).
+     */
     public function historyDown(callable $setInputTextCallback): void
     {
         if ($this->historyIndex === -1) {
