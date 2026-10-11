@@ -43,8 +43,20 @@ class ChatSubmissionHandler
                 $result = $jsonService->makeCall($services, "ai", $promptText);
 
                 if (isset($result["success"]) && $result["success"]) {
+                    $outputLines = $result["output"];
+                    /** @var \App\Services\TerminalLayoutService $layoutService */
+                    $layoutService = $services["layout"];
+
+                    $incomingSize = $layoutService->calculateMessageLinesSize(
+                        $outputLines,
+                    );
+                    $state->setAutoScroll(false);
+                    $state->setScrollOffset(
+                        $state->getScrollOffset() + $incomingSize,
+                    );
+
                     $state->addChatMessage(
-                        "[Agent] " . implode("\n", $result["output"]),
+                        "[Agent] " . implode("\n", $outputLines),
                     );
                 } else {
                     $state->addChatMessage(
@@ -62,15 +74,41 @@ class ChatSubmissionHandler
             return true;
         }
 
+        if ($promptText === "/" || $keyBinding->isHelpCommand($promptText)) {
+            $state->addChatMessage("You: " . $promptText);
+            $state->setInputText("");
+
+            $helpOptions = $keyBinding->getHelpOptions();
+            /** @var \App\Services\TerminalLayoutService $layoutService */
+            $layoutService = $services["layout"];
+
+            $incomingSize = $layoutService->calculateMessageLinesSize(
+                $helpOptions,
+            );
+
+            $state->addChatMessage("[System] Application Help & Shortcuts:");
+            foreach ($helpOptions as $option) {
+                $state->addChatMessage($option);
+            }
+
+            $state->setAutoScroll(false);
+            $state->setScrollOffset($state->getScrollOffset() + $incomingSize);
+
+            return true;
+        }
+
         if ($promptText === "/skills") {
-            $state->addChatMessage("You: /skills");
+            $state->addChatMessage("You: " . $promptText);
             $state->setInputText("");
             $state->setAutoScroll(true);
             $state->setProcessing(true);
 
             try {
+                $skillsProfile = $state->getDriverProfile("skills");
                 $state->addChatMessage(
-                    "[System] Contacting active skills microservice endpoint.",
+                    "[System] Contacting active skills microservice endpoint (" .
+                        ($skillsProfile["id"] ?? "default") .
+                        ")...",
                 );
 
                 $result = $jsonService->makeCall($services, "skills");
@@ -96,7 +134,7 @@ class ChatSubmissionHandler
 
         if ($promptText === "/ai see") {
             $state->addChatMessage("You: /ai see");
-            $state->addChatMessage("[System] Registered AI Services Matrix:");
+            $state->setInputText("");
 
             $aiServices = $configManager->getServicesByCategory("ai");
             $aiProfile = $state->getDriverProfile("ai");
@@ -128,6 +166,8 @@ class ChatSubmissionHandler
         if (str_starts_with($promptText, "/ai change ")) {
             $targetService = trim(substr($promptText, strlen("/ai change ")));
             $state->addChatMessage("You: " . $promptText);
+            $state->setInputText("");
+
             $aiServices = $configManager->getServicesByCategory("ai");
 
             if (!isset($aiServices[$targetService])) {
@@ -145,17 +185,10 @@ class ChatSubmissionHandler
             return true;
         }
 
-        if ($keyBinding->isHelpCommand($promptText)) {
-            $state->addChatMessage("You: " . $promptText);
-            $state->addChatMessage("[System] Application Help & Shortcuts:");
-            foreach ($keyBinding->getHelpOptions() as $option) {
-                $state->addChatMessage($option);
-            }
-            return true;
-        }
-
         if ($keyBinding->isEditCommand($promptText)) {
             $state->addChatMessage("You: " . $promptText);
+            $state->setInputText("");
+
             $filePath = $keyBinding->extractEditPath($promptText);
 
             if (empty($filePath)) {
@@ -190,6 +223,8 @@ class ChatSubmissionHandler
 
         if ($keyBinding->isSnippetCommand($promptText)) {
             $state->addChatMessage("You: " . $promptText);
+            $state->setInputText("");
+
             $snippetName = $keyBinding->extractSnippetName($promptText);
 
             if (empty($snippetName) || $snippetName === "list") {
@@ -207,7 +242,6 @@ class ChatSubmissionHandler
             }
             return true;
         }
-
         return false;
     }
 }

@@ -47,28 +47,84 @@ class ConfigManager
      */
     private function buildSystemDriverRegistry(): void
     {
+        $logPath = dirname(__DIR__, 2) . "/.config/error.log";
+        @file_put_contents(
+            $logPath,
+            "[Registry Loop] Starting buildSystemDriverRegistry()...\n",
+            FILE_APPEND,
+        );
+        @file_put_contents(
+            $logPath,
+            "[Registry Loop] Content of stateConfig:\n" .
+                print_r($this->stateConfig, true) .
+                "\n",
+            FILE_APPEND,
+        );
+
         $systemDrivers = [];
 
         // Loop through everything your state file has activated
         foreach ($this->stateConfig as $category => $activeServiceId) {
-            // Filter out operational layout blocks like standard checkbox arrays
+            $typeInfo = gettype($activeServiceId);
+            @file_put_contents(
+                $logPath,
+                "[Registry Loop] Processing Category: '{$category}' | Value Type: {$typeInfo} | Value: " .
+                    (is_string($activeServiceId)
+                        ? "'{$activeServiceId}'"
+                        : "ARRAY") .
+                    "\n",
+                FILE_APPEND,
+            );
+
             if (is_string($activeServiceId)) {
                 $meta =
                     $this->resolveServiceMeta($category, $activeServiceId) ?:
                     [];
 
-                // Bundle the core properties into a standardized, easy-to-read model object
+                @file_put_contents(
+                    $logPath,
+                    sprintf(
+                        "[Registry Loop] resolveServiceMeta Output for ('%s', '%s'):\n%s\n",
+                        $category,
+                        $activeServiceId,
+                        print_r($meta, true),
+                    ),
+                    FILE_APPEND,
+                );
+
+                // Bundle the core properties into a standardized model object
                 $systemDrivers[$category] = [
                     "id" => $activeServiceId,
                     "endpoint" => $meta["endpoint"] ?? "",
                     "type" => $meta["type"] ?? "shell",
                     "method" => $meta["method"] ?? "POST",
+                    "action" => $meta["action"] ?? "",
                     "cmds" => $meta["cmds"] ?? [],
                 ];
+
+                @file_put_contents(
+                    $logPath,
+                    "[Registry Loop] Successfully bundled '{$category}' into registry.\n",
+                    FILE_APPEND,
+                );
+            } else {
+                @file_put_contents(
+                    $logPath,
+                    "[Registry Loop] WARNING: Skipped '{$category}' because its value is not a string!\n",
+                    FILE_APPEND,
+                );
             }
         }
 
         $this->systemDrivers = $systemDrivers;
+
+        @file_put_contents(
+            $logPath,
+            "[Registry Loop] Final compiled systemDrivers Output:\n" .
+                print_r($this->systemDrivers, true) .
+                "\n",
+            FILE_APPEND,
+        );
     }
 
     /**

@@ -21,23 +21,50 @@ class JsonService
     ): array {
         /** @var AppState $state */
         $state = $services["state"];
-        // Dynamically read the active configuration profile from the state machine's compiled registry
-        $driverProfile = method_exists($state, "getDriverProfile")
-            ? $state->getDriverProfile($category)
-            : null;
+
+        // =========================================================================
+        // 🔍 DIAGNOSTIC SYSTEM DRIVERS TRACE LOGGING
+        // =========================================================================
+        $logPath = dirname(__DIR__, 2) . "/.config/error.log";
+
+        $driversMatrix = [];
+        if (method_exists($state, "getSystemDrivers")) {
+            $driversMatrix = $state->getSystemDrivers();
+        }
+
+        // Force dump the exact layout profiles structure to your configuration disk file
+        @file_put_contents(
+            $logPath,
+            "[JsonService Trace] Requested Category: '{$category}'\n" .
+                "[JsonService Trace] getSystemDrivers Matrix Output:\n" .
+                print_r($driversMatrix, true) .
+                "\n",
+            FILE_APPEND,
+        );
+        // =========================================================================
+
+        // Safely extract the profile matching your category context
+        $driverProfile = $driversMatrix[$category] ?? null;
+
+        // Fallback shim: check if it uses sub-nested arrays (e.g., $driversMatrix[$category]['default'])
+        if (is_array($driverProfile) && !isset($driverProfile["endpoint"])) {
+            $driverProfile =
+                $driverProfile["default"] ??
+                (array_values($driverProfile)[0] ?? null);
+        }
 
         if (!$driverProfile) {
             throw new Exception(
-                "Target system driver profile category context error: '{$category}' is not configured or active.",
+                "Target system driver profile category context error: '{$category}' is not configured or active inside getSystemDrivers().",
             );
         }
 
-        // Instantly assign values from the pre-resolved structural object fields
-
+        // Instantly assign values from the resolved structural array fields
         $endpoint = $driverProfile["endpoint"] ?? "";
         $method = strtoupper($driverProfile["method"] ?? "POST");
         $type = strtolower($driverProfile["type"] ?? "shell");
         $key = $driverProfile["key"] ?? "";
+        $action = $driverProfile["action"] ?? "default";
 
         $payload = [
             "action" => $action,
@@ -66,7 +93,7 @@ class JsonService
     }
 
     /**
-     * Infrastructure Adapter A: Local CLI / Shell Processors
+     * Infrastructure Local CLI / Shell Processors
      */
     private function executeLocalShellCall(
         string $endpoint,
@@ -86,7 +113,7 @@ class JsonService
         $escapedKey = escapeshellarg($payload["key"]);
 
         $command = sprintf(
-            "php %s --action=%s --input=%s --key=%s 2>&1",
+            "%s --action=%s --input=%s --key=%s 2>&1",
             $endpoint,
             $escapedAction,
             $escapedInput,
@@ -117,7 +144,7 @@ class JsonService
     }
 
     /**
-     * Infrastructure Adapter B: Remote Web Microservice APIs (Shim Web Server)
+     * Remote Web Microservice APIs
      */
     private function executeRemoteHttpCall(
         string $endpoint,

@@ -48,20 +48,6 @@ class MouseInteractionService
             $kindName = $event->action->name;
         }
 
-        $logPath = dirname(__DIR__, 2) . "/.config/error.log";
-
-        // 🔬 EMERGENCY SIGNAL TRACE: Log raw un-filtered event signature instantly to disk
-        @file_put_contents(
-            $logPath,
-            sprintf(
-                "[Mouse Hardware Gate] Raw Event Intercepted! Kind Name: '%s' | App State Focus: '%s' | Active MaxScroll: %d\n",
-                $kindName,
-                $state->getInputFocus(),
-                $maxScroll,
-            ),
-            FILE_APPEND,
-        );
-
         $isScrollUp =
             $kindName === "ScrollUp" ||
             str_contains(strtolower($kindName), "up");
@@ -73,9 +59,6 @@ class MouseInteractionService
             return false;
         }
 
-        // =========================================================================
-        // CASE A: FULLSCREEN FILE EDITOR VIEWPORT SCROLLING
-        // =========================================================================
         if ($state->isEditorOpen()) {
             $termHeight =
                 $display && method_exists($display, "size")
@@ -98,9 +81,6 @@ class MouseInteractionService
             return true;
         }
 
-        // =========================================================================
-        // CASE B: STANDARD CHAT WINDOW LOG SCROLLING (DUAL AXIS SAFETY PACK)
-        // =========================================================================
         $oldOffset = $state->getScrollOffset();
 
         // SCROLL REVERSED DIRECTION INTERCEPT (Move Viewport UP)
@@ -122,18 +102,6 @@ class MouseInteractionService
             if ($newOffset >= $maxScroll) {
                 $state->setAutoScroll(true);
             }
-
-            @file_put_contents(
-                $logPath,
-                sprintf(
-                    "[Mouse Core Action Success] Shifted Offset from %d to %d | MaxScroll was: %d | AutoScroll forced to: %s\n",
-                    $oldOffset,
-                    $state->getScrollOffset(),
-                    $maxScroll,
-                    $state->isAutoScroll() ? "TRUE" : "FALSE",
-                ),
-                FILE_APPEND,
-            );
 
             return true;
         }

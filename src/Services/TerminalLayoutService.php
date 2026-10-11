@@ -126,6 +126,30 @@ class TerminalLayoutService
     }
 
     /**
+     * Calculates the exact number of wrapped TUI lines a message block will consume.
+     *
+     * @param string|array $message Dynamic log line text or an array of lines
+     */
+    public function calculateMessageLinesSize(mixed $message): int
+    {
+        $lines = is_array($message)
+            ? $message
+            : explode("\n", (string) $message);
+        $totalLinesCount = 0;
+
+        foreach ($lines as $line) {
+            // Count the lines after running them through your exact word wrap rules
+            $wrappedSegments = \App\Support\ReflectionHelper::wrapText(
+                $line,
+                $this->innerWidth,
+            );
+            $totalLinesCount += max(1, count($wrappedSegments));
+        }
+
+        return $totalLinesCount;
+    }
+
+    /**
      *
      * @return array{chatTitle: string, inputTitle: string}
      */
