@@ -25,6 +25,16 @@ class CodedKeyEventHandler
         array $services,
         int $maxScroll,
     ): bool {
+        /** @var \App\State\AppState $state */
+        $state = $services["state"];
+
+        // Dynamically read the true, live wrapped limits out of your app state machine!
+        // This stops the boundaries from caching onto zero, completely unlocking your
+        // viewport page shifts.
+        $liveMaxScroll = method_exists($state, "getMaxScroll")
+            ? $state->getMaxScroll()
+            : $maxScroll;
+
         // Normalize Enum properties to safely read string signatures ('Up', 'Down', 'Enter')
         $codeName =
             is_object($event->code) && property_exists($event->code, "name")
@@ -40,8 +50,10 @@ class CodedKeyEventHandler
             return true;
         }
 
-        // Delegate viewport structural navigation overrides (Arrows, PageUp, Backspaces)
-        if ($this->navigationHandler->handle($event, $services, $maxScroll)) {
+        // Pass the live, un-cached maximum boundaries constraint map downstream!
+        if (
+            $this->navigationHandler->handle($event, $services, $liveMaxScroll)
+        ) {
             return true;
         }
 

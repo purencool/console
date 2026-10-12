@@ -1,26 +1,75 @@
 <?php
 /**
  * Artisan Shim Endpoint
- * Decodes incoming JSON requests, executes the corresponding Artisan command safely,
- * and returns the output as a JSON response.
+ * Uniform JSON payload processing block across both CLI and HTTP boundaries.
  */
 
 header("Content-Type: application/json");
 
-//Capture and decode the incoming JSON payload
-$requestBody = file_get_contents("php://input");
+$requestBody = "";
+$invocationMethod = PHP_SAPI === "cli" ? "CLI_ARGUMENT" : "HTTP_STREAM";
+
+// 1. Standarised Ingestion: Read uniform JSON strings from CLI arguments or HTTP posts dynamically
+if (PHP_SAPI === "cli") {
+    $requestBody = $argv[1] ?? "{}";
+} else {
+    $requestBody = file_get_contents("php://input");
+}
+
+// =========================================================================
+// INBOUND CONTEXT LOGGING ENTRYPOINT
+// =========================================================================
+$basePath = dirname(__DIR__);
+$logDirectory = $basePath . "/.config";
+if (!file_exists($logDirectory)) {
+    @mkdir($logDirectory, 0755, true);
+}
+$logFilePath = $logDirectory . "/endpoint_activity.log";
+$timestamp = date("Y-m-d H:i:s");
+
+@file_put_contents(
+    $logFilePath,
+    "========================================================================\n" .
+        "[{$timestamp}] [INBOUND] Request received via context channel: {$invocationMethod}\n" .
+        "📥 RAW TRANSMISSION STRING POOL:\n" .
+        $requestBody .
+        "\n",
+    FILE_APPEND,
+);
+// =========================================================================
+
+// Exactly identical JSON processing pipeline across both execution contexts
 $data = json_decode($requestBody, true);
 
-if (json_last_error() !== JSON_ERROR_NONE) {
-    http_response_code(400);
-    echo json_encode([
-        "status" => "error",
-        "message" => "Invalid JSON payload received.",
-    ]);
+if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+    if (PHP_SAPI !== "cli") {
+        http_response_code(400);
+    }
+
+    $errorResponse = json_encode(
+        [
+            "status" => "error",
+            "message" => "Invalid JSON payload received.",
+            "raw_received" => $requestBody,
+        ],
+        JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
+    );
+
+    @file_put_contents(
+        $logFilePath,
+        "❌ [PARSING ERROR] Malformed JSON syntax structure caught. Aborting.\n" .
+            "📤 OUTBOUND ERROR RESPONSE STRING:\n" .
+            $errorResponse .
+            "\n" .
+            "========================================================================\n",
+        FILE_APPEND,
+    );
+
+    echo $errorResponse;
     exit();
 }
 
-// Identify the requested command/action
+// Identify parameters from the standardized data layout map
 $action = $data["action"] ?? null;
 $inputParam = $data["input"] ?? "";
 
@@ -30,7 +79,6 @@ $artisanPath = __DIR__ . "/../../agents/artisan";
 // Map incoming actions to strict Artisan commands (Prevents shell injection)
 switch ($action) {
     case "llm_chat":
-        // Escaping the user input safely for the CLI argument
         $escapedInput = escapeshellarg($inputParam);
         $command =
             "php " .
@@ -64,26 +112,67 @@ switch ($action) {
         break;
 }
 
+// Log internal routing task assignment frames
+@file_put_contents(
+    $logFilePath,
+    "🎯 EXTRACTED PROPERTIES:\n" .
+        "   Category Action -> '" .
+        ($action ?? "none") .
+        "'\n" .
+        "   Input Query     -> '" .
+        $inputParam .
+        "'\n" .
+        "SUBSHELL EXECUTION INVOCATION:\n" .
+        "   " .
+        $command .
+        "\n",
+    FILE_APPEND,
+);
+
 // Execute the command safely and capture output
 $output = [];
 $returnCode = 0;
-
-// exec handles array reference for line-by-line output
 exec($command . " 2>&1", $output, $returnCode);
 
-// Respond with a clean JSON object
+// Respond with a clean JSON object structure envelope
 if ($returnCode === 0) {
-    echo json_encode([
-        "status" => "success",
-        "command_executed" => $action ?? "list",
-        "output" => $output,
-    ]);
+    $finalResponse = json_encode(
+        [
+            "status" => "success",
+            "command_executed" => $action ?? "list",
+            "output" => $output,
+        ],
+        JSON_UNESCAPED_SLASHES,
+    );
 } else {
-    http_response_code(500);
-    echo json_encode([
-        "status" => "error",
-        "command_executed" => $action ?? "list",
-        "return_code" => $returnCode,
-        "output" => $output,
-    ]);
+    if (PHP_SAPI !== "cli") {
+        http_response_code(500);
+    }
+    $finalResponse = json_encode(
+        [
+            "status" => "error",
+            "command_executed" => $action ?? "list",
+            "return_code" => $returnCode,
+            "output" => $output,
+        ],
+        JSON_UNESCAPED_SLASHES,
+    );
 }
+
+// =========================================================================
+// OUTBOUND RESPONSE AUDIT LOG CLOSURE
+// =========================================================================
+@file_put_contents(
+    $logFilePath,
+    "📦 SUBSHELL EXIT CODE: " .
+        $returnCode .
+        "\n" .
+        "📤 OUTBOUND SYSTEM CONSOLE PACKET RESPONSE:\n" .
+        json_encode(json_decode($finalResponse), JSON_PRETTY_PRINT) .
+        "\n" .
+        "========================================================================\n",
+    FILE_APPEND,
+);
+// =========================================================================
+
+echo $finalResponse;

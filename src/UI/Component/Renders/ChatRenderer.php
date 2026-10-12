@@ -12,7 +12,7 @@ class ChatRenderer
 {
     /**
      * Handles text auto-wrapping, dynamic scrolling offsets, processing spinners,
-     * and prefix syntax styling.
+     * and prefix syntax styling using a pure read-only layout view mapping pass.
      *
      * @param array<string, object> $services Centralised system dependency registry
      */
@@ -20,12 +20,22 @@ class ChatRenderer
     {
         /** @var AppState $state */
         $state = $services["state"];
-
         /** @var TerminalLayoutService $layoutService */
         $layoutService = $services["layout"];
 
+        // 💡 Direct child state reference targeting to bypass dynamic proxies cleanly
+        $chatState = method_exists($state, "chat") ? $state->chat() : $state;
+
         $sliceChatHeight = $layoutService->getSliceChatHeight();
+        if ($sliceChatHeight <= 0) {
+            $sliceChatHeight = 21;
+        }
+
         $innerWidth = $layoutService->getInnerWidth();
+        if ($innerWidth <= 0) {
+            $innerWidth = 40;
+        }
+
         $spanClass = $layoutService->getSpanClass();
         $prefixes = $layoutService->getPrefixes();
 
@@ -33,8 +43,11 @@ class ChatRenderer
         $vPad = $metrics["vPad"] ?? 1;
         $hPadStr = $metrics["hPadStr"] ?? " ";
 
+        // Ingest history lines straight from the master collection
+        $chatLogArray = $chatState->getChatLog();
+
+        // Perform text wrapping calculations
         $wrappedChatLog = [];
-        $chatLogArray = $state->getChatLog();
         foreach ($chatLogArray as $logLine) {
             foreach (ReflectionHelper::wrapText($logLine, $innerWidth) as $wl) {
                 if (trim($wl) !== "") {
@@ -43,6 +56,7 @@ class ChatRenderer
             }
         }
 
+        // Render ongoing background microservice loaders
         if ($state->isProcessing()) {
             $spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             $spinner =
@@ -57,35 +71,38 @@ class ChatRenderer
             );
         }
 
-        // Dynamic Viewport Window Scroll Calculations
-        $totalLines = count($wrappedChatLog);
-        $maxScroll = max(0, $totalLines - $sliceChatHeight);
+        // Compute layout limits
+        $totalWrappedLines = count($wrappedChatLog);
+        $maxScroll = max(0, $totalWrappedLines - $sliceChatHeight);
 
-        if (method_exists($state, "setMaxScroll")) {
-            $state->setMaxScroll($maxScroll);
+        // Sync constraints directly with keybinding modules
+        if (method_exists($chatState, "setMaxScroll")) {
+            $chatState->setMaxScroll($maxScroll);
         }
 
-        $initialOffset = $state->getScrollOffset();
-        $autoScrollState = $state->isAutoScroll() ? "TRUE" : "FALSE";
-
-        // If auto-scroll is locked on, it forces the view to the bottom lines
-        if (method_exists($state, "isAutoScroll") && $state->isAutoScroll()) {
-            $state->setScrollOffset($maxScroll);
+        // If auto-scroll is locked, snap down to the tail end of the array.
+        // Otherwise, honor the precise user scroll position unmodified!
+        $currentScroll = $chatState->getScrollOffset();
+        if (
+            method_exists($chatState, "isAutoScroll") &&
+            $chatState->isAutoScroll()
+        ) {
+            $currentScroll = $maxScroll;
+            if (method_exists($chatState, "setScrollOffset")) {
+                $chatState->setScrollOffset($maxScroll);
+            }
+        } else {
+            $currentScroll = min(max(0, $currentScroll), $maxScroll);
         }
 
-        // Clamp the scroll boundaries within safe ranges
-        $currentScroll = min(max(0, $state->getScrollOffset()), $maxScroll);
-        if (method_exists($state, "setScrollOffset")) {
-            $state->setScrollOffset($currentScroll);
-        }
-
+        // Slice out the visible portion matching your visual view frame
         $visibleLog = array_slice(
             $wrappedChatLog,
             $currentScroll,
             $sliceChatHeight,
         );
 
-        // Construct Styled Lines Matrix
+        // Construct Styled Lines Matrix Layout
         $chatLines = [];
         for ($i = 0; $i < $vPad; $i++) {
             $chatLines[] = Line::fromString("");

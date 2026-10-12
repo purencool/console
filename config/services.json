@@ -1,17 +1,17 @@
 {
  "ai":{
       "default": {
-         "endpoint":"php ./tests/endpoint.php",
+         "endpoint":"php <path to end point>/endpoint.php",
          "key":"",
-         "method":"POST",
+         "method":"",
          "type": "shell",
          "action": "llm_chat",
          "cmds":{}
       },
       "service_two": {
-        "endpoint":"php ./tests/endpoint.php",
+        "endpoint":"php <path to end point>/endpoint.php",
         "key":"",
-        "method":"POST",
+        "method":"",
         "type": "shell",
         "action": "llm_chat",
         "cmds":{}
@@ -19,7 +19,7 @@
     },
   "skills": {
     "default": {
-      "endpoint":"php ./tests/endpoint.php",
+      "endpoint":"php <path to end point>/endpoint.php",
       "key":"",
       "method":"",
       "type": "shell",

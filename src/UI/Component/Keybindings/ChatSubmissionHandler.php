@@ -60,14 +60,10 @@ class ChatSubmissionHandler
             return false;
         }
 
-        // Toggle processing mode on to handle background processing cycles efficiently
-        if (method_exists($state, "setProcessing")) {
-            $state->setProcessing(true);
-        }
-
         $handled = false;
 
         if (!str_starts_with($promptText, "/")) {
+            // 💡 Processing state management is handled internally by StandardChatProcessor!
             $handled = $this->chatProcessor->execute($services, $promptText);
         } else {
             // Clear entry box buffer natively upon any command catch match
@@ -80,7 +76,7 @@ class ChatSubmissionHandler
                     "",
                 );
             } else {
-                // 🚀 FIXED: Clear array index indices [0] and [1] applied to remove parser noise
+                // Clear array index indices [0] and [1] applied to remove parser noise
                 $parts = explode(" ", $promptText, 2);
                 $baseCommand = isset($parts[0]) ? $parts[0] : "";
                 $argument = isset($parts[1]) ? $parts[1] : "";
@@ -108,11 +104,7 @@ class ChatSubmissionHandler
             }
         }
 
-        // Execution completed, surrender processing ticks back to idle limits
-        if (method_exists($state, "setProcessing")) {
-            $state->setProcessing(false);
-        }
-
+        // Handle layout changes safely without blocking active processing states
         if (method_exists($state, "setInvalidateLayout")) {
             $state->setInvalidateLayout(true);
         }

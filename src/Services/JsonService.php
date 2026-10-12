@@ -22,9 +22,6 @@ class JsonService
         /** @var \App\Services\ConfigManager $config */
         $config = $services["config"] ?? null;
 
-        // =========================================================================
-        // 🔍 DIAGNOSTIC SYSTEM DRIVERS TRACE LOGGING
-        // =========================================================================
         $logPath = dirname(__DIR__, 2) . "/.config/error.log";
 
         if (!$config) {
@@ -57,17 +54,6 @@ class JsonService
             "input" => $input,
             "key" => $key,
         ];
-
-        // Force dump the exact layout profiles structure to your configuration disk file
-        @file_put_contents(
-            $logPath,
-            "[JsonService Trace] Requested Category: '{$category}'\n" .
-                "[JsonService Trace] getSystemDrivers Matrix Output:\n" .
-                print_r($driversMatrix, true) .
-                "\n",
-            FILE_APPEND,
-        );
-        // =========================================================================
 
         // Safely extract the profile matching your category context
         $driverProfile = $driversMatrix[$category] ?? null;
@@ -121,9 +107,6 @@ class JsonService
     /**
      * Infrastructure Local CLI / Shell Processors
      */
-    /**
-     * Infrastructure Local CLI / Shell Processors
-     */
     private function executeLocalShellCall(
         string $endpoint,
         array $payload,
@@ -137,27 +120,20 @@ class JsonService
             ];
         }
 
-        // 💡 FIXED: Safely wrap options strings into strict shell parameters
-        $escapedAction = escapeshellarg($payload["action"] ?? "default");
-        $escapedInput = escapeshellarg($payload["input"] ?? "");
-        $escapedKey = escapeshellarg($payload["key"] ?? "");
+        // Convert the payload dictionary into a uniform JSON string format
+        $jsonPayloadString = json_encode($payload, JSON_UNESCAPED_SLASHES);
 
-        // Generates cleanly quoted system arguments, blocking token serialization errors
-        $command = sprintf(
-            "%s --action=%s --input=%s --key=%s 2>&1",
-            $endpoint,
-            $escapedAction,
-            $escapedInput,
-            $escapedKey,
-        );
+        // Safely wrap the complete JSON string into a single shell argument block
+        $escapedJsonArgument = escapeshellarg($jsonPayloadString);
+
+        // Compile the command layout matching your standardized convention
+        $command = sprintf("%s %s 2>&1", $endpoint, $escapedJsonArgument);
 
         $output = [];
         $returnCode = 0;
         exec($command, $output, $returnCode);
 
         $rawOutput = trim(implode("\n", $output));
-
-        // If the endpoint output itself is a raw json error string, pass it up gracefully
         $decoded = json_decode($rawOutput, true);
 
         if (json_last_error() === JSON_ERROR_NONE) {

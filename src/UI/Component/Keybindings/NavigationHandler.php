@@ -19,9 +19,9 @@ class NavigationHandler
         /** @var AppState $state */
         $state = $services["state"];
 
-        $maxScroll = method_exists($state, "getMaxScroll")
-            ? $state->getMaxScroll()
-            : $maxScroll;
+        // Grab the explicit, dedicated ChatState instance directly to guarantee value changes sync up!
+        $chatState = method_exists($state, "chat") ? $state->chat() : $state;
+
         $codeName =
             is_object($event->code) && property_exists($event->code, "name")
                 ? $event->code->name
@@ -29,16 +29,19 @@ class NavigationHandler
 
         switch ($codeName) {
             case "PageUp":
-                $state->setAutoScroll(false);
-                $state->setScrollOffset(max(0, $state->getScrollOffset() - 5));
+                // 💡 Change mutations to target the verified chat context explicitly
+                $chatState->setAutoScroll(false);
+                $chatState->setScrollOffset(
+                    max(0, $chatState->getScrollOffset() - 15),
+                );
                 return true;
 
             case "PageDown":
-                $state->setScrollOffset(
-                    min($maxScroll, $state->getScrollOffset() + 5),
+                $chatState->setScrollOffset(
+                    min($maxScroll, $chatState->getScrollOffset() + 15),
                 );
-                if ($state->getScrollOffset() >= $maxScroll) {
-                    $state->setAutoScroll(true);
+                if ($chatState->getScrollOffset() >= $maxScroll) {
+                    $chatState->setAutoScroll(true);
                 }
                 return true;
 
