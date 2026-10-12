@@ -33,6 +33,13 @@ class TerminalSubmissionHandler
 
             // Forward execution task securely through your injected shell service registry layer
             $shell = $services["shell"] ?? null;
+
+            // Toggle processing to high-frequency rendering mode if the shell service
+            // outputs any animated sequences or takes time to compute
+            if (method_exists($state, "setProcessing")) {
+                $state->setProcessing(true);
+            }
+
             $output = $shell->execute($command);
 
             if ($output !== null && trim($output) !== "") {
@@ -43,6 +50,16 @@ class TerminalSubmissionHandler
 
             // Clean active typing input buffer line
             $state->setActiveTerminalInput("");
+
+            // Relinquish processing mode back to kernel-level idling
+            if (method_exists($state, "setProcessing")) {
+                $state->setProcessing(false);
+            }
+        }
+
+        // Force a dirty state flag toggle right here.
+        if (method_exists($state, "getInvalidateLayout")) {
+            $state->setInvalidateLayout(true);
         }
 
         return true;

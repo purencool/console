@@ -19,18 +19,44 @@ class JsonService
         string $category,
         string $input = "",
     ): array {
-        /** @var AppState $state */
-        $state = $services["state"];
+        /** @var \App\Services\ConfigManager $config */
+        $config = $services["config"] ?? null;
 
         // =========================================================================
         // 🔍 DIAGNOSTIC SYSTEM DRIVERS TRACE LOGGING
         // =========================================================================
         $logPath = dirname(__DIR__, 2) . "/.config/error.log";
 
-        $driversMatrix = [];
-        if (method_exists($state, "getSystemDrivers")) {
-            $driversMatrix = $state->getSystemDrivers();
+        if (!$config) {
+            throw new \Exception(
+                "Critical Core Failure: Centralised 'config' manager service is
+                missing from container registration.",
+            );
         }
+
+        // ConfigManager service key!
+        $driversMatrix = $config->getSystem();
+        $driverProfile = $driversMatrix[$category] ?? null;
+
+        if (!$driverProfile) {
+            throw new \Exception(
+                "Target system driver profile category context error: '{$category}'
+                is not configured or active inside your active services.",
+            );
+        }
+
+        // Instantly assign values from the pre-resolved structural object fields
+        $endpoint = $driverProfile["endpoint"] ?? "";
+        $method = strtoupper($driverProfile["method"] ?? "POST");
+        $type = strtolower($driverProfile["type"] ?? "shell");
+        $key = $driverProfile["key"] ?? "";
+        $action = $driverProfile["action"] ?? "default";
+
+        $payload = [
+            "action" => $action,
+            "input" => $input,
+            "key" => $key,
+        ];
 
         // Force dump the exact layout profiles structure to your configuration disk file
         @file_put_contents(
@@ -95,6 +121,9 @@ class JsonService
     /**
      * Infrastructure Local CLI / Shell Processors
      */
+    /**
+     * Infrastructure Local CLI / Shell Processors
+     */
     private function executeLocalShellCall(
         string $endpoint,
         array $payload,
@@ -108,10 +137,12 @@ class JsonService
             ];
         }
 
-        $escapedAction = escapeshellarg($payload["action"]);
-        $escapedInput = escapeshellarg($payload["input"]);
-        $escapedKey = escapeshellarg($payload["key"]);
+        // 💡 FIXED: Safely wrap options strings into strict shell parameters
+        $escapedAction = escapeshellarg($payload["action"] ?? "default");
+        $escapedInput = escapeshellarg($payload["input"] ?? "");
+        $escapedKey = escapeshellarg($payload["key"] ?? "");
 
+        // Generates cleanly quoted system arguments, blocking token serialization errors
         $command = sprintf(
             "%s --action=%s --input=%s --key=%s 2>&1",
             $endpoint,
@@ -124,14 +155,22 @@ class JsonService
         $returnCode = 0;
         exec($command, $output, $returnCode);
 
-        $rawOutput = implode("\n", $output);
+        $rawOutput = trim(implode("\n", $output));
+
+        // If the endpoint output itself is a raw json error string, pass it up gracefully
         $decoded = json_decode($rawOutput, true);
 
         if (json_last_error() === JSON_ERROR_NONE) {
+            $isSuccess =
+                $returnCode === 0 && ($decoded["status"] ?? "") !== "error";
+            $outputLines =
+                $decoded["output"] ?? ($decoded["message"] ?? $rawOutput);
+
             return [
-                "success" =>
-                    $returnCode === 0 && ($decoded["status"] ?? "") !== "error",
-                "output" => $decoded["output"] ?? $output,
+                "success" => $isSuccess,
+                "output" => is_array($outputLines)
+                    ? $outputLines
+                    : [$outputLines],
                 "raw" => $rawOutput,
             ];
         }

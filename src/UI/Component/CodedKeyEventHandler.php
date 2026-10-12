@@ -9,6 +9,12 @@ use PhpTui\Term\Event\CodedKeyEvent;
 
 class CodedKeyEventHandler
 {
+    // Persistent shared handler instances to prevent memory/signal accumulation leaks
+    private ?GlobalHotkeyHandler $globalHotkeyHandler = null;
+    private ?NavigationHandler $navigationHandler = null;
+    private ?TerminalSubmissionHandler $terminalSubmissionHandler = null;
+    private ?ChatSubmissionHandler $chatSubmissionHandler = null;
+
     /**
      * Delegates specific coded navigation keys down into specialized single-responsibility handlers.
      *
@@ -25,22 +31,29 @@ class CodedKeyEventHandler
                 ? $event->code->name
                 : (string) $event->code;
 
+        // Lazy-load instances on demand and cache them for all subsequent key events
+        $this->globalHotkeyHandler ??= new GlobalHotkeyHandler();
+        $this->navigationHandler ??= new NavigationHandler();
+
         // Delegate core panel focus hotkeys and layout modifications
-        if (new GlobalHotkeyHandler()->handle($event, $services)) {
+        if ($this->globalHotkeyHandler->handle($event, $services)) {
             return true;
         }
 
         // Delegate viewport structural navigation overrides (Arrows, PageUp, Backspaces)
-        if (new NavigationHandler()->handle($event, $services, $maxScroll)) {
+        if ($this->navigationHandler->handle($event, $services, $maxScroll)) {
             return true;
         }
 
         // Delegate form action submission routes
         if ($codeName === "Enter") {
-            if (new TerminalSubmissionHandler()->handle($services)) {
+            $this->terminalSubmissionHandler ??= new TerminalSubmissionHandler();
+            $this->chatSubmissionHandler ??= new ChatSubmissionHandler();
+
+            if ($this->terminalSubmissionHandler->handle($services)) {
                 return true;
             }
-            if (new ChatSubmissionHandler()->handle($services)) {
+            if ($this->chatSubmissionHandler->handle($services)) {
                 return true;
             }
         }

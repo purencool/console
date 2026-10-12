@@ -1,57 +1,72 @@
 <?php
-
 namespace App\Services;
 
-/**
- * ClipboardService provides a method to read text from the system
- * clipboard across different OS environments safely.
- * @package App\Services
- *
- */
 class ClipboardService
 {
-    /**
-     * Attempts to read text from the system clipboard across different
-     * OS environments safely.
-     *
-     * @throws \Exception If the clipboard operation fails.
-     *
-     * @return string The text read from the clipboard or an empty string.
-     */
-    public static function read(): string
+    /** @var string|null Cached path or name of the resolved working system clipboard command utility */
+    private ?string $detectedEngine = null;
+
+    public function __construct()
     {
-        $os = PHP_OS_FAMILY;
+        // Check for working system clipboard binaries EXACTLY ONCE on boot!
+        $this->detectClipboardEngine();
+    }
 
-        if ($os === "Darwin") {
-            return (string) shell_exec("pbpaste 2>/dev/null");
+    /**
+     * Probes the operating system environment layers to discover and cache
+     * a working clipboard binary tool.
+     */
+    private function detectClipboardEngine(): void
+    {
+        // Check for macOS native clipboard utilities first
+        if (PHP_OS_FAMILY === "Darwin") {
+            $this->detectedEngine = "pbpaste";
+            return;
         }
 
-        if ($os === "Windows") {
-            return (string) shell_exec(
-                'powershell.exe -command "Get-Clipboard" 2>NUL',
-            );
+        // Check Linux environment clipboard systems safely by testing paths once
+        if (trim((string) @shell_exec("which wl-paste 2>/dev/null")) !== "") {
+            $this->detectedEngine = "wl-paste";
+            return;
         }
 
-        $hasDisplay = getenv("DISPLAY") || getenv("WAYLAND_DISPLAY");
-
-        if (!$hasDisplay) {
-            return "";
+        if (trim((string) @shell_exec("which xclip 2>/dev/null")) !== "") {
+            $this->detectedEngine = "xclip";
+            return;
         }
 
-        if (trim((string) shell_exec("which wl-paste 2>/dev/null"))) {
-            return (string) shell_exec("timeout 1 wl-paste 2>/dev/null");
+        if (trim((string) @shell_exec("which xsel 2>/dev/null")) !== "") {
+            $this->detectedEngine = "xsel";
+            return;
         }
 
-        if (trim((string) shell_exec("which xclip 2>/dev/null"))) {
-            return (string) shell_exec(
-                "timeout 1 xclip -selection clipboard -o 2>/dev/null",
-            );
-        }
+        $this->detectedEngine = "none";
+    }
 
-        if (trim((string) shell_exec("which xsel 2>/dev/null"))) {
-            return (string) shell_exec("timeout 1 xsel -b -o 2>/dev/null");
-        }
+    /**
+     * High-performance, cached clipboard text extractor.
+     * Operates instantly without spawning redundant shell processes.
+     */
+    public function get(): string
+    {
+        // No shell processes or child forks are generated here when idle!
+        switch ($this->detectedEngine) {
+            case "pbpaste":
+                return (string) @shell_exec("pbpaste 2>/dev/null");
 
-        return "";
+            case "wl-paste":
+                return (string) @shell_exec("timeout 1 wl-paste 2>/dev/null");
+
+            case "xclip":
+                return (string) @shell_exec(
+                    "timeout 1 xclip -selection clipboard -o 2>/dev/null",
+                );
+
+            case "xsel":
+                return (string) @shell_exec("timeout 1 xsel -b -o 2>/dev/null");
+
+            default:
+                return "";
+        }
     }
 }

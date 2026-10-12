@@ -18,12 +18,12 @@
       }
     },
   "skills": {
-    "skills_default": {
+    "default": {
       "endpoint":"php ./tests/endpoint.php",
       "key":"",
       "method":"",
       "type": "shell",
-      "action": "",
+      "action": "skills",
       "cmds":{}
      },
     "skills_second": {

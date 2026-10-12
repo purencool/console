@@ -3,20 +3,20 @@ namespace App\Services;
 
 class ConfigManager
 {
-    /** @var array */
+    /** @var array<string, array> */
     private array $servicesMatrix = [];
 
-    /** @var array */
+    /** @var array<string, mixed> */
     private array $stateConfig = [];
 
-    /** @var array<mixed> */
-    private array $systemDrivers;
+    /** @var array<string, array> */
+    private array $systemDrivers = [];
 
     public function __construct()
     {
         $basePath = dirname(__DIR__, 2);
 
-        // Load Services Config
+        // Ingest and parse Services Configuration Matrix
         $servicesPath = $_ENV["SERVICES_CONFIG"] ?? getenv("SERVICES_CONFIG");
         if ($servicesPath) {
             $fullServicesPath = $basePath . "/" . ltrim($servicesPath, "/");
@@ -27,7 +27,7 @@ class ConfigManager
             }
         }
 
-        // Load State Config
+        // Ingest and parse State Activation Configuration
         $statePath = $_ENV["STATE_CONFIG"] ?? getenv("STATE_CONFIG");
         if ($statePath) {
             $fullStatePath = $basePath . "/" . ltrim($statePath, "/");
@@ -37,62 +37,23 @@ class ConfigManager
             }
         }
 
+        // Compile active infrastructure mapping connections registry
         $this->buildSystemDriverRegistry();
     }
 
     /**
-     * Builds the complete array of system drivers currently offered to the application.
-     * Maps every active category type straight to its active ID and operational configuration.
-     *
+     * Compiles an optimized matrix of active system infrastructure driver profiles.
      */
     private function buildSystemDriverRegistry(): void
     {
-        $logPath = dirname(__DIR__, 2) . "/.config/error.log";
-        @file_put_contents(
-            $logPath,
-            "[Registry Loop] Starting buildSystemDriverRegistry()...\n",
-            FILE_APPEND,
-        );
-        @file_put_contents(
-            $logPath,
-            "[Registry Loop] Content of stateConfig:\n" .
-                print_r($this->stateConfig, true) .
-                "\n",
-            FILE_APPEND,
-        );
-
         $systemDrivers = [];
 
-        // Loop through everything your state file has activated
         foreach ($this->stateConfig as $category => $activeServiceId) {
-            $typeInfo = gettype($activeServiceId);
-            @file_put_contents(
-                $logPath,
-                "[Registry Loop] Processing Category: '{$category}' | Value Type: {$typeInfo} | Value: " .
-                    (is_string($activeServiceId)
-                        ? "'{$activeServiceId}'"
-                        : "ARRAY") .
-                    "\n",
-                FILE_APPEND,
-            );
-
             if (is_string($activeServiceId)) {
                 $meta =
                     $this->resolveServiceMeta($category, $activeServiceId) ?:
                     [];
 
-                @file_put_contents(
-                    $logPath,
-                    sprintf(
-                        "[Registry Loop] resolveServiceMeta Output for ('%s', '%s'):\n%s\n",
-                        $category,
-                        $activeServiceId,
-                        print_r($meta, true),
-                    ),
-                    FILE_APPEND,
-                );
-
-                // Bundle the core properties into a standardized model object
                 $systemDrivers[$category] = [
                     "id" => $activeServiceId,
                     "endpoint" => $meta["endpoint"] ?? "",
@@ -101,46 +62,26 @@ class ConfigManager
                     "action" => $meta["action"] ?? "",
                     "cmds" => $meta["cmds"] ?? [],
                 ];
-
-                @file_put_contents(
-                    $logPath,
-                    "[Registry Loop] Successfully bundled '{$category}' into registry.\n",
-                    FILE_APPEND,
-                );
-            } else {
-                @file_put_contents(
-                    $logPath,
-                    "[Registry Loop] WARNING: Skipped '{$category}' because its value is not a string!\n",
-                    FILE_APPEND,
-                );
             }
         }
 
         $this->systemDrivers = $systemDrivers;
-
-        @file_put_contents(
-            $logPath,
-            "[Registry Loop] Final compiled systemDrivers Output:\n" .
-                print_r($this->systemDrivers, true) .
-                "\n",
-            FILE_APPEND,
-        );
     }
 
     /**
+     * Retrieves the compiled system drivers configuration registry.
      *
-     * Get the system drivers registry. This is an array of service
-     * configurations that are currently active in the state file.
-     *
-     * @return array<mixed>
+     * @return array<string, array>
      */
-    public function getSystem()
+    public function getSystem(): array
     {
         return $this->systemDrivers;
     }
 
     /**
-     * Get the entire services configuration matrix.
+     * Retrieves the entire raw services configuration matrix.
+     *
+     * @return array<string, array>
      */
     public function getServicesConfig(): array
     {
@@ -148,7 +89,9 @@ class ConfigManager
     }
 
     /**
-     * Get the entire state configuration matrix.
+     * Retrieves the entire raw active state configuration matrix.
+     *
+     * @return array<string, mixed>
      */
     public function getStateConfig(): array
     {
@@ -156,7 +99,9 @@ class ConfigManager
     }
 
     /**
-     * Resolves metadata for a specific key/service pairing.
+     * Resolves configuration metadata properties matching a specific category and service ID pairing.
+     *
+     * @return array<string, mixed>|null
      */
     public function resolveServiceMeta(
         string $category,
@@ -166,8 +111,9 @@ class ConfigManager
     }
 
     /**
-     * Get services matching a specific category block.
-     * @return array<string, mixed>
+     * Retrieves an isolated profile bucket group matching a target category context.
+     *
+     * @return array<string, array>
      */
     public function getServicesByCategory(string $category): array
     {
@@ -175,7 +121,9 @@ class ConfigManager
     }
 
     /**
-     * Get a specific metadata array for a given service.
+     * Retrieves metadata options for a given target service ID.
+     *
+     * @return array<string, mixed>|null
      */
     public function getServiceMeta(string $category, string $serviceId): ?array
     {
@@ -183,7 +131,7 @@ class ConfigManager
     }
 
     /**
-     * Get a specific value from the state configuration using a key.
+     * Safely retrieves a single runtime config parameter out of the active state configurations map.
      */
     public function getStateValue(string $key, mixed $default = null): mixed
     {
@@ -191,7 +139,7 @@ class ConfigManager
     }
 
     /**
-     * Converts the current configuration state into a pretty-printed JSON string for logging.
+     * Serializes active service configurations maps into a JSON representation string format.
      */
     public function __toString(): string
     {

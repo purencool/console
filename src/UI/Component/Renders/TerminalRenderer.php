@@ -6,8 +6,20 @@ use App\Services\TerminalLayoutService;
 use PhpTui\Tui\Text\Line;
 use PhpTui\Tui\Style\Style;
 
+// 🚀 FIXED: Extracted out of the loop. This compiles exactly once when PHP parses the file.
+class TerminalViewportMock
+{
+    public function viewportArea()
+    {
+        return null;
+    }
+}
+
 class TerminalRenderer
 {
+    // Persistent instance cache to avoid recreating the wrapper on every single frame tick
+    private ?TerminalViewportMock $viewportMock = null;
+
     /**
      * Renders text layouts, buffer offsets, and terminal input cursors for the drawer window.
      *
@@ -26,20 +38,15 @@ class TerminalRenderer
         /** @var TerminalLayoutService $layoutService */
         $layoutService = $services["layout"];
 
-        // 💡 1. Dynamically read metrics and dimensions from your layout service
+        // Dynamically read metrics and dimensions from your layout service
         $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
         $vPad = $metrics["vPad"] ?? 1;
         $hPadStr = $metrics["hPadStr"] ?? " ";
 
-        // 💡 2. Calculate the exact terminal drawer partition height (40% of view) on the fly
-        $viewport = $layoutService->getDimensions(
-            new class {
-                public function viewportArea()
-                {
-                    return null;
-                }
-            },
-        );
+        // Reuses the exact same mock instance instead of recreating an anonymous class
+        $this->viewportMock ??= new TerminalViewportMock();
+        $viewport = $layoutService->getDimensions($this->viewportMock);
+
         $terminalDrawerHeight = $state->isTerminalDrawerOpen()
             ? (int) ($viewport["height"] * 0.4)
             : 0;

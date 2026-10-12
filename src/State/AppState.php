@@ -2,6 +2,7 @@
 namespace App\State;
 
 use App\Services\ConfigManager;
+
 /**
  * Class AppState
  *
@@ -84,9 +85,12 @@ class AppState
     private TerminalState $terminal;
     private EditorState $editor;
     private SystemState $system;
+    private ConfigManager $config;
+    private bool $invalidateLayout = true;
 
     public function __construct(ConfigManager $configManager)
     {
+        $this->config = $configManager;
         $this->chat = new ChatState();
         $this->terminal = new TerminalState();
         $this->editor = new EditorState();
@@ -97,17 +101,52 @@ class AppState
     {
         return $this->chat;
     }
+
     public function terminal(): TerminalState
     {
         return $this->terminal;
     }
+
     public function editor(): EditorState
     {
         return $this->editor;
     }
+
     public function system(): SystemState
     {
         return $this->system;
+    }
+
+    /**
+     * Checks if a user action has altered the underlying context state.
+     */
+    public function getInvalidateLayout(): bool
+    {
+        return $this->invalidateLayout;
+    }
+
+    /**
+     * Marks the application state as modified to flag a visual redraw.
+     */
+    public function setInvalidateLayout(bool $invalidateLayout = true): void
+    {
+        $this->invalidateLayout = $invalidateLayout;
+    }
+
+    /**
+     * Resets the visual layout state update tracker back to safe idle values.
+     */
+    public function clearInvalidateLayout(): void
+    {
+        $this->invalidateLayout = false;
+    }
+
+    /**
+     * Proxies directly back to your single source of truth config container.
+     */
+    public function getSystemDrivers(): array
+    {
+        return $this->config->getSystem();
     }
 
     /**

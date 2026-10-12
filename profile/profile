@@ -1,0 +1,78 @@
+#!/bin/bash
+
+set -e
+
+# Secure immediate root escalation checks
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Error: This performance test harness requires elevated root privileges."
+  echo "Please execute using: sudo ./run_perf_test.sh"
+  exit 1
+fi
+
+echo " Verifying system dependency mapping registries for Fedora..."
+if ! command -v execsnoop &> /dev/null && [ ! -f "/usr/share/bcc/tools/execsnoop" ]; then
+    echo "Installing bcc-tools container libraries..."
+    dnf install -y bcc-tools kernel-devel
+fi
+
+# Locate the accurate bcc paths on Fedora 44
+BCC_PATH="/usr/share/bcc/tools"
+if [ ! -d "$BCC_PATH" ] && command -v execsnoop &> /dev/null; then
+    BCC_PATH=$(dirname "$(which execsnoop)")
+fi
+
+echo " Locating active target PHP application worker thread..."
+PHP_PID=$(pgrep -f "bin/app.php" | head -n 1 || pgrep -f "profile_test.php" | head -n 1 || true)
+
+if [ -empty "$PHP_PID" ]; then
+    # Fallback search if launched directly as a raw executable binary file link
+    PHP_PID=$(pgrep -x "php" | head -n 1 || true)
+fi
+
+if [ -z "$PHP_PID" ]; then
+    echo "❌ Error: Target PHP application is not currently running."
+    echo "Please launch your console application interface in another window first, then run this test."
+    exit 1
+fi
+
+echo "========================================================================"
+echo " TARGET DETECTED -> PHP Process ID: $PHP_PID"
+echo " Test Phase 1/2: Capturing dynamic subprocess forks via execsnoop (5s)..."
+echo "========================================================================"
+
+# Forced logging map output initialization
+LOG_FILE="./.config/perf_trace.log"
+mkdir -p ./.config
+echo "=== PERFORMANCE TEST DUMP RECORDED AT $(date) ===" > "$LOG_FILE"
+
+# Run execsnoop asynchronously for 5 seconds matching your process footprint target
+if [ -f "$BCC_PATH/execsnoop" ]; then
+    python3 "$BCC_PATH/execsnoop" -p "$PHP_PID" > ./.config/execsnoop_raw.txt &
+    SNOOP_PID=$!
+    sleep 5
+    kill $SNOOP_PID 2>/dev/null || true
+
+    echo " Subprocess Fork Analysis Concluded." >> "$LOG_FILE"
+    cat ./.config/execsnoop_raw.txt >> "$LOG_FILE"
+else
+    echo " Warning: execsnoop path target skipped. Profiling alternate kernel stacks..." >> "$LOG_FILE"
+fi
+
+echo "========================================================================"
+echo " Test Phase 2/2: Sampling CPU scheduling locks via profile tool (5s)..."
+echo "========================================================================"
+
+if [ -f "$BCC_PATH/profile" ]; then
+    echo -e "\n=== TOP 10 KERNEL/USER STACK OFFENDERS ===" >> "$LOG_FILE"
+    python3 "$BCC_PATH/profile" -p "$PHP_PID" -F 99 5 >> "$LOG_FILE" 2>/dev/null || true
+fi
+
+# Clean intermediate memory arrays caching
+rm -f ./.config/execsnoop_raw.txt
+
+echo "========================================================================"
+echo " CRITICAL ANALYSIS COMPLETE!"
+echo "========================================================================"
+echo "Results have been compiled safely into your local configuration directory:"
+echo " ./.config/perf_trace.log"
+echo -e "\nHere are the top most active execution outputs captured:\n"

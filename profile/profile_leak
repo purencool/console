@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Target directory
+TARGET_DIR="/home/work/Software/c8/console"
+
+echo "================================================================="
+echo " SCANNING FOR BOOTSTRAP, SERVICES, AND EVENT LOOPS"
+echo "================================================================="
+
+echo -e "\n1. Possible Entry Points & Command Runners:"
+find "$TARGET_DIR" -maxdepth 3 -type f \( -name "console" -o -name "app.php" -o -name "Application.php" \) ! -path "*/vendor/*"
+
+echo -e "\n2. Where 'Terminal' or 'SignalEventProvider' is instantiated:"
+grep -rn --include="*.php" --exclude-dir={vendor,var,cache} "new Terminal" "$TARGET_DIR"
+grep -rn --include="*.php" --exclude-dir={vendor,var,cache} "SignalEventProvider" "$TARGET_DIR"
+
+echo -e "\n3. Service Definitions & Dependency Injection (Looking for 'shell' or 'services'):"
+find "$TARGET_DIR" -type f \( -name "services.php" -o -name "di.php" -o -name "*Container*.php" \) ! -path "*/vendor/*"
+grep -rn --include="*.php" --exclude-dir={vendor,var,cache} "ShellService" "$TARGET_DIR" | head -n 10
+
+echo -e "\n4. Main Loop Structural Constructs (while true / event loops):"
+grep -rn --include="*.php" --exclude-dir={vendor,var,cache} -E "while\s*\(true\)" "$TARGET_DIR"
+
+echo "================================================================="
+echo "Done! Review any files matching these criteria for loops."

@@ -17,6 +17,13 @@ use PhpTui\Term\Event\MouseEvent;
 
 class EventHandler
 {
+    // Persist singletons statically across infinite static event invocations
+    private static ?EditorEventHandler $editorEventHandler = null;
+    private static ?TerminalSubmissionHandler $terminalSubmissionHandler = null;
+    private static ?ChatSubmissionHandler $chatSubmissionHandler = null;
+    private static ?NavigationHandler $navigationHandler = null;
+    private static ?CharKeyEventHandler $charKeyEventHandler = null;
+
     /**
      * Central Event Processing Router.
      * Evaluates incoming hardware signals, processes shortcuts, and cascades data down.
@@ -36,8 +43,9 @@ class EventHandler
         /** @var MouseInteractionService $mouseService */
         $mouseService = $services["mouse"];
 
-        // Delegate full-screen text editor input intercepts
-        if (new EditorEventHandler()->handle($event, $services)) {
+        // Lazy-load and reuse the editor event handler instance
+        self::$editorEventHandler ??= new EditorEventHandler();
+        if (self::$editorEventHandler->handle($event, $services)) {
             return true;
         }
 
@@ -99,9 +107,18 @@ class EventHandler
                     return true;
 
                 case KeyBindingService::ACTION_PASTE:
-                    $clipboard = $services["clipboard"] ?? null;
-                    if ($clipboard && method_exists($clipboard, "get")) {
-                        $state->insertInputText($clipboard::get());
+                    if (
+                        $event instanceof \PhpTui\Term\Event\CodedKeyEvent ||
+                        $event instanceof \PhpTui\Term\Event\CharKeyEvent
+                    ) {
+                        /** @var \App\Services\ClipboardService $clipboard */
+                        $clipboard = $services["clipboard"] ?? null;
+                        if ($clipboard && method_exists($clipboard, "get")) {
+                            $pastedText = $clipboard->get();
+                            if (trim($pastedText) !== "") {
+                                $state->insertInputText($pastedText);
+                            }
+                        }
                     }
                     return true;
             }
@@ -117,18 +134,22 @@ class EventHandler
 
         // Form Submission & Input Prompt Commands Routing Gateway
         if ($codeName === "Enter") {
-            if (new TerminalSubmissionHandler()->handle($services)) {
+            self::$terminalSubmissionHandler ??= new TerminalSubmissionHandler();
+            self::$chatSubmissionHandler ??= new ChatSubmissionHandler();
+
+            if (self::$terminalSubmissionHandler->handle($services)) {
                 return true;
             }
-            if (new ChatSubmissionHandler()->handle($services)) {
+            if (self::$chatSubmissionHandler->handle($services)) {
                 return true;
             }
         }
 
-        //Navigation Keys Fallback (PageUp/PageDown, Arrows navigation, Backspace)
+        // Navigation Keys Fallback (PageUp/PageDown, Arrows navigation, Backspace)
         if ($event instanceof CodedKeyEvent) {
+            self::$navigationHandler ??= new NavigationHandler();
             if (
-                new NavigationHandler()->handle($event, $services, $maxScroll)
+                self::$navigationHandler->handle($event, $services, $maxScroll)
             ) {
                 return true;
             }
@@ -136,7 +157,8 @@ class EventHandler
 
         // Standard Character Typing Buffer Pipeline Fallback
         if ($event instanceof CharKeyEvent) {
-            if (new CharKeyEventHandler()->handle($event, $services)) {
+            self::$charKeyEventHandler ??= new CharKeyEventHandler();
+            if (self::$charKeyEventHandler->handle($event, $services)) {
                 return true;
             }
         }

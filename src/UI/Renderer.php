@@ -14,6 +14,13 @@ use PhpTui\Tui\Text\Text;
 
 class Renderer
 {
+    // Cached renderer instances to prevent allocation churn on every frame
+    private ?EditorRenderer $editorRenderer = null;
+    private ?InputBoxRenderer $inputBoxRenderer = null;
+    private ?ChatRenderer $chatRenderer = null;
+    private ?TerminalRenderer $terminalRenderer = null;
+    private ?LayoutRenderer $layoutRenderer = null;
+
     /**
      * Master UI Drawing Gateway orchestrating sub-pane composition.
      *
@@ -32,7 +39,8 @@ class Renderer
         $metrics = $layoutService->getLayoutMetrics(hPad: 1, vPad: 1);
 
         if ($state->isEditorOpen()) {
-            new EditorRenderer()->render($display, $services, $showCursor);
+            $this->editorRenderer ??= new EditorRenderer();
+            $this->editorRenderer->render($display, $services, $showCursor);
             return;
         }
 
@@ -43,15 +51,15 @@ class Renderer
             $metrics["hPad"],
         );
 
-        $inputData = new InputBoxRenderer()->render(
+        $this->inputBoxRenderer ??= new InputBoxRenderer();
+        $inputData = $this->inputBoxRenderer->render(
             $services,
             $geometry["innerWidth"],
             $layoutService->getSpanClass(),
             $layoutService->getBgStyle(),
         );
 
-        // 💡 FIXED: Restore the dynamic height split calculations calculation right here!
-        // This calculates inner parameters and updates the Layout Service prior to rendering the Chat block.
+        // Restore the dynamic height split calculations calculation right here!
         $layoutService->calculatePaneHeights(
             $dims["height"],
             $inputData["height"],
@@ -63,9 +71,10 @@ class Renderer
         $titles = $layoutService->compileWidgetTitles($state);
 
         // Assemble Widgets Stack
+        $this->chatRenderer ??= new ChatRenderer();
         $leftWidgets = [
             ReflectionHelper::createBlock($titles["chatTitle"])->widget(
-                new ChatRenderer()->render($services),
+                $this->chatRenderer->render($services),
             ),
             ReflectionHelper::createBlock($titles["inputTitle"])->widget(
                 ParagraphWidget::fromText(
@@ -75,7 +84,8 @@ class Renderer
         ];
 
         if ($state->isTerminalDrawerOpen()) {
-            $termLines = new TerminalRenderer()->render(
+            $this->terminalRenderer ??= new TerminalRenderer();
+            $termLines = $this->terminalRenderer->render(
                 $services,
                 $layoutService->getSpanClass(),
                 $layoutService->getBgStyle(),
@@ -89,7 +99,8 @@ class Renderer
         }
 
         // Final Canvas Projection
-        new LayoutRenderer()->render(
+        $this->layoutRenderer ??= new LayoutRenderer();
+        $this->layoutRenderer->render(
             $display,
             $services,
             $leftWidgets,

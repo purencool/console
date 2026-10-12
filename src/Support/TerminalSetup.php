@@ -4,14 +4,8 @@ namespace App\Support;
 use PhpTui\Term\Terminal;
 use PhpTui\Term\Actions;
 
-/**
- *
- */
 class TerminalSetup
 {
-    /**
-     *
-     */
     public static function initialize(): Terminal
     {
         // Send all custom terminal modifications (Alternate screen, clear, and mouse tracking protocols)
@@ -27,8 +21,6 @@ class TerminalSetup
                 $terminal->disableRawMode();
             } catch (\Throwable $e) {
             }
-            // Cleanly undo EVERY manual modification sent during startup
-            // \x1b[?1003l = Turn off scrolling mouse track | \x1b[?1006l = Turn off SGR extended format
             fwrite(STDOUT, "\x1b[?1003l\x1b[?1006l\x1b[?1049l");
         });
 
