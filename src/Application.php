@@ -39,8 +39,8 @@ class Application
 
         $this->terminal = TerminalSetup::initialize();
 
-        // Reactivate hardware mouse coordinate captures directly over raw terminal channels
-        fwrite(STDOUT, "\x1b[?1003h\x1b[?1006h");
+        // 💡 ENABLE BRACKETED PASTE MODE (\x1b[?2004h) along with mouse tracking over raw stdout
+        fwrite(STDOUT, "\x1b[?1003h\x1b[?1006h\x1b[?2004h");
         fflush(STDOUT);
 
         $display = DisplayBuilder::default()->build();
@@ -78,8 +78,7 @@ class Application
             $write = null;
             $except = null;
 
-            // Block for up to 100ms at the kernel level.
-            $hasInput = @stream_select($read, $write, $except, 0, 100000);
+            $hasInput = @stream_select($read, $write, $except, 0, 5000);
 
             if ($hasInput > 0 || $state->isProcessing()) {
                 // Input is ready or an AI response spinner is active, process the event stream
@@ -97,6 +96,8 @@ class Application
                         $display,
                     );
 
+                    // 💡 FIXED: Force clean, immediate screen invalidation on event arrival.
+                    // This lets the non-blocking fread() buffer handler process raw blocks with no drawing bottlenecks.
                     if (method_exists($state, "setInvalidateLayout")) {
                         $state->setInvalidateLayout(true);
                     }
@@ -106,7 +107,8 @@ class Application
 
         // Clean Application Shutdown Sequence
         $display->clear();
-        fwrite(STDOUT, "\x1b[?1003l\x1b[?1006l\x1b[?1049l");
+        // Cleanly disable Bracketed Paste Mode (\x1b[?2004l) to restore normal system terminal state on exit
+        fwrite(STDOUT, "\x1b[?1003l\x1b[?1006l\x1b[?2004l\x1b[?1049l");
         echo "\x1b[?25h"; // Restore native hardware cursor
     }
 }

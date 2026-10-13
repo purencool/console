@@ -32,6 +32,142 @@ class EditorState
     /** @var int */
     private int $scrollY = 0;
 
+    private bool $aiPromptOpen = false;
+    private string $aiPromptText = "";
+    private int $aiPromptCursor = 0;
+    private bool $selectModeActive = false;
+    private int $selectStartRow = 0;
+    private int $selectStartCol = 0;
+
+    public function isSelectModeActive(): bool
+    {
+        return $this->selectModeActive;
+    }
+    public function setSelectModeActive(bool $active): void
+    {
+        $this->selectModeActive = $active;
+    }
+
+    public function getSelectStartRow(): int
+    {
+        return $this->selectStartRow;
+    }
+    public function setSelectStartRow(int $row): void
+    {
+        $this->selectStartRow = $row;
+    }
+
+    public function getSelectStartCol(): int
+    {
+        return $this->selectStartCol;
+    }
+    public function setSelectStartCol(int $col): void
+    {
+        $this->selectStartCol = $col;
+    }
+
+    public function isAiPromptOpen(): bool
+    {
+        return $this->aiPromptOpen;
+    }
+    public function setAiPromptOpen(bool $open): void
+    {
+        $this->aiPromptOpen = $open;
+    }
+
+    public function getAiPromptText(): string
+    {
+        return $this->aiPromptText;
+    }
+    public function setAiPromptText(string $text): void
+    {
+        $this->aiPromptText = $text;
+    }
+
+    public function insertAiPromptChar(string $char): void
+    {
+        $left = mb_substr($this->aiPromptText, 0, $this->aiPromptCursor);
+        $right = mb_substr($this->aiPromptText, $this->aiPromptCursor);
+        $this->aiPromptText = $left . $char . $right;
+        $this->aiPromptCursor += mb_strlen($char);
+    }
+
+    public function backspaceAiPromptChar(): void
+    {
+        if ($this->aiPromptCursor > 0) {
+            $left = mb_substr(
+                $this->aiPromptText,
+                0,
+                $this->aiPromptCursor - 1,
+            );
+            $right = mb_substr($this->aiPromptText, $this->aiPromptCursor);
+            $this->aiPromptText = $left . $right;
+            $this->aiPromptCursor--;
+        }
+    }
+
+    /**
+     * Wipes out a batch block of lines cleanly between the starting anchor and current row cursor position.
+     */
+    public function deleteSelectedBlock(): void
+    {
+        if (!$this->selectModeActive) {
+            return;
+        }
+
+        $currentRow = $this->getEditorRow();
+        $startRow = $this->selectStartRow;
+
+        $minRow = min($startRow, $currentRow);
+        $maxRow = max($startRow, $currentRow);
+
+        $lines = $this->getEditorLines();
+
+        if ($minRow === $maxRow) {
+            // 💡 Single Line Selection Deletion
+            $currentLine = $lines[$minRow] ?? "";
+            $startCol = $this->selectStartCol;
+            $currentCol = $this->getEditorCol();
+
+            $minCol = min($startCol, $currentCol);
+            $maxCol = max($startCol, $currentCol);
+
+            $left = mb_substr($currentLine, 0, $minCol);
+            $right = mb_substr($currentLine, $maxCol);
+            $lines[$minRow] = $left . $right;
+
+            $this->setEditorCol($minCol);
+        } else {
+            // 💡 Multi-Line Selection Deletion
+            $topLine = $lines[$minRow] ?? "";
+            $bottomLine = $lines[$maxRow] ?? "";
+
+            $startCol =
+                $minRow === $startRow
+                    ? $this->selectStartCol
+                    : $this->getEditorCol();
+            $endCol =
+                $minRow === $startRow
+                    ? $this->getEditorCol()
+                    : $this->selectStartCol;
+
+            // Retain text outside selection margins
+            $left = mb_substr($topLine, 0, $startCol);
+            $right = mb_substr($bottomLine, $endCol);
+
+            $lines[$minRow] = $left . $right;
+
+            // Remove all fully highlighted lines caught in between the selection frame
+            array_splice($lines, $minRow + 1, $maxRow - $minRow);
+
+            $this->setEditorRow($minRow);
+            $this->setEditorCol($startCol);
+        }
+
+        $this->setEditorLines($lines);
+        $this->selectModeActive = false;
+    }
+
     /**
      *
      */

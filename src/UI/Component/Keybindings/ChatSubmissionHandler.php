@@ -37,6 +37,7 @@ class ChatSubmissionHandler
             "/ai" => new AiChangeCommand(),
             "/edit" => new EditCommand(),
             "/snippet" => new SnippetCommand(),
+            "/s" => new SnippetCommand(),
         ];
     }
 

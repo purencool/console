@@ -2,126 +2,73 @@
 namespace App\UI\Component;
 
 use App\State\AppState;
-use PhpTui\Term\Event;
+use App\UI\Component\Editor\EditorGlobalHotkeyHandler;
+use App\UI\Component\Editor\EditorAiPromptHandler;
+use App\UI\Component\Editor\EditorTextPipelineHandler;
+use App\UI\Component\Editor\EditorAiRefactorProcessor;
+use PhpTui\Term\Event as TermEvent;
 use PhpTui\Term\Event\CharKeyEvent;
-use PhpTui\Term\Event\CodedKeyEvent;
-use PhpTui\Term\KeyModifiers;
 
 class EditorEventHandler
 {
+    private EditorGlobalHotkeyHandler $hotkeyHandler;
+    private EditorAiPromptHandler $aiHandler;
+    private EditorTextPipelineHandler $textHandler;
+    private EditorAiRefactorProcessor $aiProcessor;
+
+    public function __construct()
+    {
+        $this->hotkeyHandler = new EditorGlobalHotkeyHandler();
+        $this->aiHandler = new EditorAiPromptHandler();
+        $this->textHandler = new EditorTextPipelineHandler();
+        $this->aiProcessor = new EditorAiRefactorProcessor();
+    }
+
     /**
-     * Intercepts, isolates, and processes inputs exclusively when full-screen file editor mode is active.
+     * Intercepts, isolates, and routes inputs exclusively when full-screen file editor mode is active.
      *
      * @param array<string, object> $services Centralised system dependency registry
      */
-    public function handle(Event $event, array $services): bool
+    public function handle(\PhpTui\Term\Event $event, array $services): bool
     {
         /** @var AppState $state */
         $state = $services["state"];
-
         if (!$state->isEditorOpen()) {
             return false;
         }
 
-        if ($event instanceof CodedKeyEvent) {
-            $codeName =
-                is_object($event->code) && property_exists($event->code, "name")
-                    ? $event->code->name
-                    : (string) $event->code;
+        $editor = method_exists($state, "editor") ? $state->editor() : $state;
 
-            switch ($codeName) {
-                case "Esc":
-                    $state->setEditorOpen(false);
-                    return true;
-
-                case "Up":
-                    if ($state->getEditorRow() > 0) {
-                        $state->setEditorRow($state->getEditorRow() - 1);
-                    }
-                    return true;
-
-                case "Down":
-                    if (
-                        $state->getEditorRow() <
-                        count($state->getEditorLines()) - 1
-                    ) {
-                        $state->setEditorRow($state->getEditorRow() + 1);
-                    }
-                    return true;
-
-                case "Left":
-                    if ($state->getEditorCol() > 0) {
-                        $state->setEditorCol($state->getEditorCol() - 1);
-                    } elseif ($state->getEditorRow() > 0) {
-                        $state->setEditorRow($state->getEditorRow() - 1);
-                        $state->setEditorCol(
-                            mb_strlen(
-                                $state->getEditorLines()[
-                                    $state->getEditorRow()
-                                ],
-                            ),
-                        );
-                    }
-                    return true;
-
-                case "Right":
-                    $currentLineLen = mb_strlen(
-                        $state->getEditorLines()[$state->getEditorRow()],
-                    );
-                    if ($state->getEditorCol() < $currentLineLen) {
-                        $state->setEditorCol($state->getEditorCol() + 1);
-                    } elseif (
-                        $state->getEditorRow() <
-                        count($state->getEditorLines()) - 1
-                    ) {
-                        $state->setEditorRow($state->getEditorRow() + 1);
-                        $state->setEditorCol(0);
-                    }
-                    return true;
-
-                case "Backspace":
-                    $state->backspaceEditorChar();
-                    return true;
-
-                case "Enter":
-                    $state->enterEditorLine();
-                    return true;
-            }
+        // 1. Process Global Control Combinos (Ctrl+A, Ctrl+B, Ctrl+S)
+        if (
+            $event instanceof CharKeyEvent &&
+            $this->hotkeyHandler->handle($event, $state, $editor)
+        ) {
+            return true;
         }
 
-        if ($event instanceof CharKeyEvent) {
-            $isCtrl =
-                ($event->modifiers & KeyModifiers::CONTROL) ===
-                KeyModifiers::CONTROL;
+        $aiPromptOpen = method_exists($editor, "isAiPromptOpen")
+            ? $editor->isAiPromptOpen()
+            : false;
+        $selectActive = method_exists($editor, "isSelectModeActive")
+            ? $editor->isSelectModeActive()
+            : false;
 
-            // Handle File Persistence Write (Ctrl + S)
-            if ($isCtrl && strtolower($event->char) === "s") {
-                $payload = implode("\n", $state->getEditorLines());
-                $result = @file_put_contents(
-                    $state->getEditorFilePath(),
-                    $payload,
-                );
-
-                $state->setEditorStatus(
-                    $result !== false
-                        ? "File saved successfully!"
-                        : "ERROR: Failed to save file! Check permissions.",
-                );
-                return true;
-            }
-
-            // Route standard typed string bytes straight into the text layout buffer arrays
-            if (
-                !$isCtrl &&
-                ord($event->char) >= 32 &&
-                $event->char !== "\x7f"
-            ) {
-                $state->insertEditorChar($event->char);
-                return true;
-            }
+        // 2. Delegate focus if AI Refactor entry widget is open
+        if ($aiPromptOpen) {
+            return $this->aiHandler->handle(
+                $event,
+                $editor,
+                fn() => $this->aiProcessor->execute($services, $state, $editor),
+            );
         }
 
-        // Catch all remaining hardware inputs to completely prevent character bleeding down into terminal/chat views
-        return true;
+        // 3. Delegate standard text mutations and arrow navigations
+        return $this->textHandler->handle(
+            $event,
+            $state,
+            $editor,
+            $selectActive,
+        );
     }
 }

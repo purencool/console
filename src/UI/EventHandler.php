@@ -29,7 +29,7 @@ class EventHandler
      * Evaluates incoming hardware signals, processes shortcuts, and cascades data down.
      */
     public static function handle(
-        Event $event,
+        \PhpTui\Term\Event $event,
         array $services,
         int $maxScroll,
         object $display,
@@ -45,6 +45,8 @@ class EventHandler
 
         // Lazy-load and reuse the editor event handler instance
         self::$editorEventHandler ??= new EditorEventHandler();
+
+        // 🚀 This will now execute perfectly with zero argument type alignment exceptions!
         if (self::$editorEventHandler->handle($event, $services)) {
             return true;
         }
