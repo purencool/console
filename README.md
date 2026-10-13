@@ -3,7 +3,8 @@
 Console is a terminal application built on top of the [tui](https://github.com/php-tui/php-tui) PHP UI terminal library. It provides a simple and intuitive interface that integrates with other tools and applications to deliver a seamless experience for users.
 
 **Tools**
-### Coming soon...
+### Coming soon.
+
 
 **Installation**
 To get started with Console, follow these steps:

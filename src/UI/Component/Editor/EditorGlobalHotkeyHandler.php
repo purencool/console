@@ -21,7 +21,7 @@ class EditorGlobalHotkeyHandler
 
         $char = strtolower($event->char);
 
-        // 💡 Route A: Toggle Inline AI Refactor Box (Ctrl + A)
+        // Toggle Inline AI Refactor Box (Ctrl + A)
         if ($char === "a") {
             $currentAiState = method_exists($editor, "isAiPromptOpen")
                 ? $editor->isAiPromptOpen()
@@ -35,7 +35,7 @@ class EditorGlobalHotkeyHandler
             return true;
         }
 
-        // 💡 Route B: Toggle Visual Block Selection Mode (Ctrl + B)
+        // Toggle Visual Block Selection Mode (Ctrl + B)
         if ($char === "b") {
             $currentSelectState = method_exists($editor, "isSelectModeActive")
                 ? $editor->isSelectModeActive()
@@ -60,7 +60,7 @@ class EditorGlobalHotkeyHandler
             return true;
         }
 
-        // 💡 Route C: Handle File Persistence Write (Ctrl + S)
+        // Handle File Persistence Write (Ctrl + S)
         if ($char === "s") {
             $payload = implode("\n", $state->getEditorLines());
             $result = @file_put_contents($state->getEditorFilePath(), $payload);
@@ -69,6 +69,27 @@ class EditorGlobalHotkeyHandler
                     ? "File saved successfully!"
                     : "ERROR: Failed to save file!",
             );
+            return true;
+        }
+
+        if ($char === "o") {
+            if (method_exists($editor, "toggleFileSidebar")) {
+                $editor->toggleFileSidebar();
+            } else {
+                $current = method_exists($editor, "isFileSidebarOpen")
+                    ? $editor->isFileSidebarOpen()
+                    : true;
+                if (method_exists($editor, "setFileSidebarOpen")) {
+                    $editor->setFileSidebarOpen(!$current);
+                }
+            }
+
+            $status =
+                method_exists($editor, "isFileSidebarOpen") &&
+                $editor->isFileSidebarOpen()
+                    ? "VISIBLE"
+                    : "HIDDEN";
+            $state->setEditorStatus("File sidebar tree is now: " . $status);
             return true;
         }
 

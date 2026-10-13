@@ -18,6 +18,7 @@ class KeyBindingService
     public const ACTION_PASTE = "paste";
     public const ACTION_HISTORY_UP = "history_up";
     public const ACTION_HISTORY_DOWN = "history_down";
+    public const ACTION_EDITOR_SELECT_BLOCK = "editor_select_block";
 
     // 💡 ADDED: Viewport Scrolling Actions Constants
     public const ACTION_SCROLL_PAGE_UP = "SCROLL_PAGE_UP";
@@ -33,19 +34,33 @@ class KeyBindingService
     public const CMD_SKILLS_SEE = "/skills see";
     public const CMD_SNIPPET = "/snippet";
     public const CMD_EDIT = "/edit";
+    public const ACTION_EDITOR_TOGGLE_SIDEBAR = "editor_toggle_sidebar";
+    public const ACTION_EDITOR_EXECUTE_SELECT = "editor_execute_select";
 
+    /**
+     * Matches raw terminal events into explicit action keywords.
+     */
     /**
      * Matches raw terminal events into explicit action keywords.
      */
     public function matchEvent(Event $event): ?string
     {
-        // 1. Handle explicit Coded keys (Esc, Tab, Arrows, Page Up/Down)
+        // =========================================================================
+        // 1. Handle structural Coded keys (Esc, Tab, Arrows, Enter, Space)
+        // =========================================================================
         if ($event instanceof CodedKeyEvent) {
             $name = method_exists($event->code, "name")
                 ? $event->code->name()
-                : (property_exists($event->code, "name")
-                    ? $event->code->name
-                    : "");
+                : $event->code->name ?? "";
+
+            // 💡 FIXED: Enter and Space must live inside the CodedKeyEvent block!
+            if (
+                $name === "Enter" ||
+                $name === "Space" ||
+                $event->code === \PhpTui\Term\KeyCode::Enter
+            ) {
+                return self::ACTION_EDITOR_EXECUTE_SELECT;
+            }
 
             if ($event->code === KeyCode::Esc || $name === "Esc") {
                 return self::ACTION_EXIT;
@@ -59,7 +74,6 @@ class KeyBindingService
             if ($event->code === KeyCode::Down || $name === "Down") {
                 return self::ACTION_HISTORY_DOWN;
             }
-
             if ($event->code === KeyCode::PageUp || $name === "PageUp") {
                 return self::ACTION_SCROLL_PAGE_UP;
             }
@@ -68,13 +82,15 @@ class KeyBindingService
             }
         }
 
-        // 2. Handle text-level stream mutations (Ctrl Combos)
         if ($event instanceof CharKeyEvent) {
             $isCtrl =
                 ($event->modifiers & KeyModifiers::CONTROL) ===
                 KeyModifiers::CONTROL;
             $char = strtolower($event->char);
 
+            if ($isCtrl && ($char === " " || $event->char === "\x00")) {
+                return self::ACTION_EDITOR_EXECUTE_SELECT;
+            }
             if (($char === "q" && $isCtrl) || $event->char === "\x11") {
                 return self::ACTION_FORCE_EXIT;
             }
@@ -86,6 +102,12 @@ class KeyBindingService
             }
             if (($char === "v" && $isCtrl) || $event->char === "\x16") {
                 return self::ACTION_PASTE;
+            }
+            if (($char === "b" && $isCtrl) || $event->char === "\x02") {
+                return self::ACTION_EDITOR_SELECT_BLOCK;
+            }
+            if (($char === "o" && $isCtrl) || $event->char === "\x0f") {
+                return self::ACTION_EDITOR_TOGGLE_SIDEBAR;
             }
         }
 

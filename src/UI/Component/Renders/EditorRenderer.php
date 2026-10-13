@@ -6,7 +6,6 @@ use App\Support\ReflectionHelper;
 use App\Services\TerminalLayoutService;
 use PhpTui\Tui\Extension\Core\Widget\GridWidget;
 use PhpTui\Tui\Extension\Core\Widget\ParagraphWidget;
-use App\UI\Component\Editor\EditorSpanCollectionRenderer;
 use PhpTui\Tui\Text\Line;
 use PhpTui\Tui\Text\Text;
 
@@ -40,7 +39,7 @@ class EditorRenderer
         /** @var TerminalLayoutService $layoutService */
         $layoutService = $services["layout"];
 
-        // 💡 Grab the explicit, dedicated EditorState instance directly to match your handlers
+        // Grab the explicit, dedicated EditorState instance directly to match your handlers
         $editor = method_exists($state, 'editor') ? $state->editor() : $state;
 
         // Dynamically read hardware dimension parameters straight out of your layout service
@@ -113,7 +112,7 @@ class EditorRenderer
             }
         }
 
-        // VERTICAL VIEWPORT SCROLL ADJUSTMENTS AGAINST VIRTUAL LINES
+        // 💡 2. VERTICAL VIEWPORT SCROLL ADJUSTMENTS AGAINST VIRTUAL LINES
         $visibleLines = max(1, $termHeight - 3 - ($vPad * 2));
         $scrollY      = $state->getEditorScrollY();
 
@@ -148,8 +147,8 @@ class EditorRenderer
                 $this->spanClass::fromString($lineNumStr)->style($lineNumStyle),
             ];
 
-
-            EditorSpanCollectionRenderer::buildSpans(
+            // DELEGATED CONTEXT PASSTHROUGH ABSTRACTED CALL
+            \App\UI\Component\Editor\EditorSpanCollectionRenderer::buildSpans(
                 $spans,
                 $segmentMeta,
                 $editor,
@@ -182,7 +181,7 @@ class EditorRenderer
             $selectSpan = $this->spanClass::fromString(" 🟦 [Selection Mode]: Active! Use Arrows to expand highlight, [Backspace] to delete block.")->style($this->styleClass::default()->fg($this->colorClass::Yellow)->bg($this->colorClass::Black));
             $tuiLines[] = Line::fromSpans($selectSpan);
         } else {
-            $tipSpan = $this->spanClass::fromString(" 💡 Hints: [Ctrl+A] Inline AI Refactor | [Ctrl+B] Block Selection | [Ctrl+S] Save")->style($aiTipStyle);
+            $tipSpan = $this->spanClass::fromString(" 💡 Hints: [Tab] Switch Panels | [Ctrl+A] AI Refactor | [Ctrl+B] Block Select | [Ctrl+S] Save")->style($aiTipStyle);
             $tuiLines[] = Line::fromSpans($tipSpan);
         }
 
@@ -190,24 +189,64 @@ class EditorRenderer
             $tuiLines[] = Line::fromString("");
         }
 
-        // 5. Compile Title Header Metadata and Draw Workspace
+        // =========================================================================
+        // 💡 FIXED: Compile Title Header Metadata Globals Safely Outside Blocks!
+        // =========================================================================
         $statusText = $state->getEditorStatus() ?: "Ready";
         $title = sprintf(
             " Editor: %s [Row: %d, Col: %d] [Ctrl+S: Save | Esc: Close] - %s ",
-            $state->getEditorFilePath(),
+            $state->getEditorFilePath() ?: "No File Open",
             $row + 1,
             $col + 1,
             $statusText
         );
 
-        $display->draw(
-            GridWidget::default()
-                ->constraints($constraintClass::percentage(100))
-                ->widgets(
-                    ReflectionHelper::createBlock($title)->widget(
-                        ParagraphWidget::fromText(Text::fromLines(...$tuiLines))
+        $sidebarVisible = method_exists($editor, 'isCtrlKeyPressed') ? $editor->isCtrlKeyPressed() : false;
+        if ($sidebarVisible) {
+            $items = method_exists($editor, 'getSidebarItems') ? $editor->getSidebarItems() : [];
+            if (empty($items) && method_exists($editor, 'refreshSidebarTree')) {
+                $editor->refreshSidebarTree();
+                $items = $editor->getSidebarItems();
+            }
+
+            $sidebarLines = [];
+            $focusedRow   = method_exists($editor, 'getSidebarFocusRow') ? $editor->getSidebarFocusRow() : 0;
+            $focusStyle   = $this->styleClass::default()->bg($this->colorClass::Blue)->fg($this->colorClass::White);
+
+            // Print header metadata line inside the file viewer canvas itself
+            $sidebarLines[] = Line::fromString(" 💡 Navigation Hints: Use [Up/Down] Arrows | Release [Ctrl] to return to code");
+            $sidebarLines[] = Line::fromString(" -------------------------------------------------------------------------");
+
+            foreach ($items as $idx => $item) {
+                $icon = $item['is_dir'] ? "📁 " : "📄 ";
+                if ($idx === $focusedRow) {
+                    $sidebarLines[] = Line::fromSpans($this->spanClass::fromString(" " . $icon . $item['name'])->style($focusStyle));
+                } else {
+                    $sidebarLines[] = Line::fromString(" " . $icon . $item['name']);
+                }
+            }
+
+            $display->draw(
+                GridWidget::default()
+                    ->constraints($constraintClass::percentage(100))
+                    ->widgets(
+                        ReflectionHelper::createBlock(" Project Navigator Workspace [FULL REWRITE PANEL] ")->widget(
+                            ParagraphWidget::fromText(Text::fromLines(...$sidebarLines))
+                        )
                     )
-                )
-        );
+            );
+        } else {
+            // Takes up 100% of the screen limits when Ctrl is not held down
+            $display->draw(
+                GridWidget::default()
+                    ->constraints($constraintClass::percentage(100))
+                    ->widgets(
+                        ReflectionHelper::createBlock($title)->widget(
+                            ParagraphWidget::fromText(Text::fromLines(...$tuiLines))
+                        )
+                    )
+            );
+        }
+
     }
 }

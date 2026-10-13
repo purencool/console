@@ -39,6 +39,131 @@ class EditorState
     private int $selectStartRow = 0;
     private int $selectStartCol = 0;
 
+    private bool $fileSidebarOpen = true;
+    private array $sidebarItems = [];
+    private int $sidebarFocusRow = 0;
+    private string $sidebarScanRoot = ".";
+
+    private bool $ctrlKeyPressed = false;
+
+    public function isCtrlKeyPressed(): bool
+    {
+        return $this->ctrlKeyPressed;
+    }
+
+    public function setCtrlKeyPressed(bool $pressed): void
+    {
+        $this->ctrlKeyPressed = $pressed;
+        if ($pressed) {
+            $this->refreshSidebarTree();
+        }
+    }
+    /**
+     * Toggles the file directory tree panel open or closed.
+     */
+    public function toggleFileSidebar(): void
+    {
+        $this->fileSidebarOpen = !($this->fileSidebarOpen ?? true);
+        if ($this->fileSidebarOpen) {
+            $this->refreshSidebarTree();
+        }
+    }
+
+    public function isFileSidebarOpen(): bool
+    {
+        return $this->fileSidebarOpen;
+    }
+    public function setFileSidebarOpen(bool $open): void
+    {
+        $this->fileSidebarOpen = $open;
+    }
+
+    public function getSidebarItems(): array
+    {
+        return $this->sidebarItems;
+    }
+    public function setSidebarItems(array $items): void
+    {
+        $this->sidebarItems = $items;
+    }
+
+    public function getSidebarFocusRow(): int
+    {
+        return $this->sidebarFocusRow;
+    }
+    public function setSidebarFocusRow(int $row): void
+    {
+        $this->sidebarFocusRow = $row;
+    }
+
+    public function getSidebarScanRoot(): string
+    {
+        return $this->sidebarScanRoot;
+    }
+    public function setSidebarScanRoot(string $path): void
+    {
+        $this->sidebarScanRoot = $path;
+    }
+
+    /**
+     * Scans the target workspace root directory to generate a flattened directory map.
+     */
+    public function refreshSidebarTree(): void
+    {
+        $root = $this->sidebarScanRoot;
+        if (!is_dir($root)) {
+            return;
+        }
+
+        $items = [];
+
+        // 💡 BREADCRUMB PARENT NAVIGATOR: If we are deep inside sub-folders,
+        // inject a backtrack directory link block at the top of the tree stack!
+        if ($root !== "." && $root !== "./" && $root !== "/") {
+            $items[] = [
+                "name" => "../",
+                "path" => dirname($root),
+                "is_dir" => true,
+                "is_backtrack" => true,
+            ];
+        }
+
+        $files = scandir($root);
+        $foldersPool = [];
+        $filesPool = [];
+
+        foreach ($files as $f) {
+            if (
+                $f === "." ||
+                $f === ".." ||
+                $f === "vendor" ||
+                $f === ".git" ||
+                $f === "node_modules"
+            ) {
+                continue;
+            }
+
+            $fullPath = rtrim($root, "/") . "/" . $f;
+            if (is_dir($fullPath)) {
+                $foldersPool[] = [
+                    "name" => $f . "/",
+                    "path" => $fullPath,
+                    "is_dir" => true,
+                    "is_backtrack" => false,
+                ];
+            } else {
+                $filesPool[] = [
+                    "name" => $f,
+                    "path" => $fullPath,
+                    "is_dir" => false,
+                    "is_backtrack" => false,
+                ];
+            }
+        }
+
+        $this->sidebarItems = array_merge($items, $foldersPool, $filesPool);
+    }
+
     public function isSelectModeActive(): bool
     {
         return $this->selectModeActive;

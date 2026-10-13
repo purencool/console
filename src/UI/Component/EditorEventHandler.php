@@ -39,6 +39,23 @@ class EditorEventHandler
 
         $editor = method_exists($state, "editor") ? $state->editor() : $state;
 
+        if (
+            method_exists($event, "modifiers") ||
+            property_exists($event, "modifiers")
+        ) {
+            $hasCtrlModifier =
+                ($event->modifiers & \PhpTui\Term\KeyModifiers::CONTROL) ===
+                \PhpTui\Term\KeyModifiers::CONTROL;
+            if (method_exists($editor, "setCtrlKeyPressed")) {
+                $editor->setCtrlKeyPressed($hasCtrlModifier);
+            }
+        } else {
+            // Fallback: clear the pop-out if a raw character event arrives without modifiers
+            if (method_exists($editor, "setCtrlKeyPressed")) {
+                $editor->setCtrlKeyPressed(false);
+            }
+        }
+
         // 1. Process Global Control Combinos (Ctrl+A, Ctrl+B, Ctrl+S)
         if (
             $event instanceof CharKeyEvent &&
