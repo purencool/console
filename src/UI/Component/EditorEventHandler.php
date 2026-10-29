@@ -25,7 +25,8 @@ class EditorEventHandler
     }
 
     /**
-     * Intercepts, isolates, and routes inputs exclusively when full-screen file editor mode is active.
+     * Intercepts, isolates, and routes inputs exclusively when full-screen file
+     * editor mode is active.
      *
      * @param array<string, object> $services Centralised system dependency registry
      */
@@ -50,7 +51,6 @@ class EditorEventHandler
                 $editor->setCtrlKeyPressed($hasCtrlModifier);
             }
         } else {
-            // Fallback: clear the pop-out if a raw character event arrives without modifiers
             if (method_exists($editor, "setCtrlKeyPressed")) {
                 $editor->setCtrlKeyPressed(false);
             }
@@ -80,12 +80,21 @@ class EditorEventHandler
             );
         }
 
-        // 3. Delegate standard text mutations and arrow navigations
+        $action = null;
+        if (
+            isset($services["keybindings"]) &&
+            method_exists($services["keybindings"], "matchEvent")
+        ) {
+            $action = $services["keybindings"]->matchEvent($event);
+        }
+
+        // Pass both the hardware raw event AND the translated unified system action keyword string!
         return $this->textHandler->handle(
             $event,
             $state,
             $editor,
             $selectActive,
+            $action,
         );
     }
 }

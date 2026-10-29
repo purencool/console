@@ -17,6 +17,10 @@ class SystemState
     private array $systemDrivers = [];
     private array $options = [];
 
+    // 💡 Add these two new properties to track matches
+    private array $filteredMatches = [];
+    private string $searchPrefix = "";
+
     /**
      * Initializes the system profiles and ingests registries from the centralized config manager.
      */
@@ -108,11 +112,20 @@ class SystemState
     public function addHistory(string $input): void
     {
         $this->inputHistory[] = $input;
+        $this->clearHistorySearch(); // Clear caches when a new command is run
+    }
+
+    // 💡 Helper method to reset our filter caches when typing normally
+    public function clearHistorySearch(): void
+    {
         $this->historyIndex = -1;
+        $this->filteredMatches = [];
+        $this->searchPrefix = "";
     }
 
     /**
      * Cycles chat prompt input history retrieval collections backward (Up).
+     * Now matches entries starting with or containing your typed string!
      */
     public function historyUp(
         callable $setInputTextCallback,
@@ -121,14 +134,38 @@ class SystemState
         if (empty($this->inputHistory)) {
             return;
         }
+
+        // First time hitting UP: analyze what the user typed and create a filtered subset
         if ($this->historyIndex === -1) {
             $this->tempInput = $getInputTextCallback();
+            $this->searchPrefix = trim($this->tempInput);
+
+            if ($this->searchPrefix !== "") {
+                // Find past commands that contain or start with the typed filter (case-insensitive)
+                $prefix = strtolower($this->searchPrefix);
+                $this->filteredMatches = array_values(
+                    array_filter($this->inputHistory, function ($cmd) use (
+                        $prefix,
+                    ) {
+                        return str_contains(strtolower($cmd), $prefix);
+                    }),
+                );
+            } else {
+                // If the box was completely empty, navigate all history
+                $this->filteredMatches = $this->inputHistory;
+            }
         }
-        if ($this->historyIndex < count($this->inputHistory) - 1) {
+
+        // Navigate backwards through our specific subset of matches
+        if (
+            !empty($this->filteredMatches) &&
+            $this->historyIndex < count($this->filteredMatches) - 1
+        ) {
             $this->historyIndex++;
+            // Pull items from newest to oldest within our filtered array
             $historicalRecord =
-                $this->inputHistory[
-                    count($this->inputHistory) - 1 - $this->historyIndex
+                $this->filteredMatches[
+                    count($this->filteredMatches) - 1 - $this->historyIndex
                 ];
             $setInputTextCallback($historicalRecord);
         }
@@ -142,13 +179,18 @@ class SystemState
         if ($this->historyIndex === -1) {
             return;
         }
+
         $this->historyIndex--;
+
         if ($this->historyIndex === -1) {
+            // Reached the bottom: put back exactly what they were typing originally
             $setInputTextCallback($this->tempInput);
+            $this->filteredMatches = [];
+            $this->searchPrefix = "";
         } else {
             $historicalRecord =
-                $this->inputHistory[
-                    count($this->inputHistory) - 1 - $this->historyIndex
+                $this->filteredMatches[
+                    count($this->filteredMatches) - 1 - $this->historyIndex
                 ];
             $setInputTextCallback($historicalRecord);
         }

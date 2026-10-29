@@ -54,17 +54,27 @@ class ChatSubmissionHandler
         $keyBinding = $services["keybindings"];
 
         $rawInput = $state->getInputText();
-        $processedInput = $keyBinding->replaceCommandNew($rawInput, "\n");
-        $promptText = trim($processedInput);
+
+        //Read variables in the correct sequential order and avoid using the deleted method!
+        $promptText = trim($rawInput);
 
         if ($promptText === "") {
             return false;
         }
 
+        if (method_exists($state, "addHistory")) {
+            $state->addHistory($rawInput);
+        }
+
+        // If it looks like a snippet execution shortcut, we let the extract pipeline analyze it inside the command loop
+        $snippetName = method_exists($keyBinding, "extractSnippetName")
+            ? $keyBinding->extractSnippetName($promptText)
+            : "";
+
         $handled = false;
 
         if (!str_starts_with($promptText, "/")) {
-            // 💡 Processing state management is handled internally by StandardChatProcessor!
+            // Processing state management is handled internally by StandardChatProcessor!
             $handled = $this->chatProcessor->execute($services, $promptText);
         } else {
             // Clear entry box buffer natively upon any command catch match

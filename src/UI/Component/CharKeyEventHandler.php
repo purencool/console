@@ -28,7 +28,7 @@ class CharKeyEventHandler
 
         $textBuffer = $event->char;
 
-        // 💡 THE FIX: Check if the arriving byte sequence is the Bracketed Paste opening marker flag
+        // Check if the arriving byte sequence is the Bracketed Paste opening marker flag
         if ($textBuffer === "\x1b" || str_contains($textBuffer, "[200~")) {
             // Siphon the remaining clipboard chunk instantly via non-blocking transaction
             stream_set_blocking(STDIN, false);
@@ -60,6 +60,19 @@ class CharKeyEventHandler
                 $state->insertActiveTerminalInput($textBuffer);
             } else {
                 // Otherwise, format internal newline breaks as system chat spacers and append to main field
+                if (
+                    property_exists($state, "filteredMatchPointer") ||
+                    method_exists($state, "getCommandHistory")
+                ) {
+                    // Accessing internal parameters to ensure fluent transitions
+                    $refState = new \ReflectionClass($state);
+                    if ($refState->hasProperty("filteredMatchPointer")) {
+                        $p = $refState->getProperty("filteredMatchPointer");
+                        $p->setAccessible(true);
+                        $p->setValue($state, -1);
+                    }
+                }
+
                 $cleanChatInputText = str_replace("\n", "/n ", $textBuffer);
                 $state->insertInputText($cleanChatInputText);
             }

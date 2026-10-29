@@ -131,7 +131,6 @@ class EditorRenderer
             $tuiLines[] = Line::fromString("");
         }
 
-        // 💡 3. RENDER SCREEN SEGMENTS WITH DELEGATED SUB-RENDERER COMPONENT
         foreach ($renderSegments as $idx => $segmentMeta) {
             $currentVirtualRowIdx = $scrollY + $idx;
 
@@ -169,7 +168,6 @@ class EditorRenderer
             $tuiLines[] = Line::fromString("");
         }
 
-        // 💡 4. DYNAMIC INLINE OVERLAY BOTTOM BAR RENDERING
         $aiPromptOpen = method_exists($editor, 'isAiPromptOpen') ? $editor->isAiPromptOpen() : false;
         $selectActive = method_exists($editor, 'isSelectModeActive') ? $editor->isSelectModeActive() : false;
         $aiPromptText = method_exists($editor, 'getAiPromptText') ? $editor->getAiPromptText() : "";
@@ -247,6 +245,5 @@ class EditorRenderer
                     )
             );
         }
-
     }
 }
